@@ -15,4 +15,4 @@ An RTOS kernel written in Rust. This is a hobby project
 - [ ] x86_64 support
 
 ## Building and Testing
-Rust compiler and qemu
+Requires Rust compiler and qemu
