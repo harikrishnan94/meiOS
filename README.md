@@ -13,3 +13,6 @@ An RTOS kernel written in Rust. This is a hobby project
 - [ ] ARM32 support
 - [ ] ARM64 support
 - [ ] x86_64 support
+
+## Building and Testing
+Rust compiler and qemu
