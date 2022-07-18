@@ -1,0 +1,8 @@
+[package]
+name = "rutos"
+version = "0.1.0"
+edition = "2021"
+authors = ["Harikrishnan <harikrishnan.prabakaran@gmail.com>"]
+
+[dependencies]
+bootloader = "0.9.22" # DONOT move to 0.10.x
