@@ -5,16 +5,16 @@
 #![reexport_test_harness_main = "test_main"]
 
 use core::panic::PanicInfo;
-use rutos::println;
+use rutos::{inifinite_loop, println};
 
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
-    println!("Hello World{}", "!");
+    println!("Hello World!");
 
     #[cfg(test)]
     test_main();
 
-    loop {}
+    inifinite_loop()
 }
 
 /// This function is called on panic.
@@ -22,7 +22,7 @@ pub extern "C" fn _start() -> ! {
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     println!("{}", info);
-    loop {}
+    inifinite_loop()
 }
 
 #[cfg(test)]
