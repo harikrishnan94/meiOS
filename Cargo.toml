@@ -9,7 +9,7 @@ name = "should_panic"
 harness = false
 
 [dependencies]
-bootloader = "0.9.22" # DONOT move to 0.10.x
+bootloader = "0.9.8" # DONOT move beyond
 volatile = "0.2.6"
 spin = "0.5.2"
 x86_64 = "0.14.2"
