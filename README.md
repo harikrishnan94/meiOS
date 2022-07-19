@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/harikrishnan/rutos.svg?branch=master)](https://travis-ci.org/harikrishnan/rutos)
+[![Build Status](https://travis-ci.org/harikrishnan94/rutos.svg?branch=master)](https://travis-ci.org/harikrishnan94/rutos)
 <br />
 # RUTOS
 
