@@ -1,6 +1,6 @@
 # meiOS
 
-meiOS is a Unix like kernel for Raspberry pi 3/4 written in C/C++An RTOS kernel written in Rust. This is a hobby project
+meiOS is a Unix like kernel for Raspberry pi 3/4 written in C/C++. This is a hobby project
 
 ## Goals
 

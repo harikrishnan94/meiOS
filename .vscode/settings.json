@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "*.s": "arm",
+        "*.S": "arm"
+    },
+    "C_Cpp.errorSquiggles": "Disabled",
+    "C_Cpp.intelliSenseEngine": "Disabled"
+}
