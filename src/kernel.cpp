@@ -173,20 +173,15 @@ extern "C" /* Use C linkage for MEI_MAIN. */
 #ifdef __aarch64__
     // arguments for __aarch64__
     void
-    MEI_MAIN(uint64_t dtb_ptr32, uint64_t x1, uint64_t x2, uint64_t x3)
+    MEI_MAIN()
 #else
 // arguments for AArch32
-void MEI_MAIN(uint32_t r0, uint32_t r1, uint32_t atags)
+void MEI_MAIN(uint64_t dtb_ptr32, uint32_t corenum)
 #endif
 {
   // initialize UART for Raspi2
   uart_init(2);
   uart_puts("Hello, kernel World!\r\n");
 
-  while (1) uart_putc(uart_getc());
-
-  (void)dtb_ptr32;
-  (void)x1;
-  (void)x2;
-  (void)x3;
+  while (true) uart_putc(uart_getc());
 }

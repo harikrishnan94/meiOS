@@ -1,0 +1,45 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "type": "cmake",
+            "label": "CMake: build",
+            "command": "build",
+            "targets": [
+                "all"
+            ],
+            "group": "build",
+            "problemMatcher": [],
+            "detail": "CMake template build task"
+        },
+        {
+            "type": "shell",
+            "label": "Run Mei Kernel",
+            "command": "qemu-system-aarch64",
+            "args": [
+                "-M",
+                "raspi3b",
+                "-kernel",
+                "${command:cmake.buildDirectory}/mei",
+                "-cpu",
+                "cortex-a53",
+                "-nographic",
+                "-s",
+                "-S"
+            ],
+            "dependsOn": [
+                "CMake: Build"
+            ],
+            "isBackground": true,
+            "runOptions": {
+                "instanceLimit": 1,
+                "reevaluateOnRerun": true,
+            },
+            "problemMatcher": {
+                "background": {
+                    "activeOnStart": true,
+                }
+            }
+        }
+    ]
+}

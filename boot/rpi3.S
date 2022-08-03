@@ -23,6 +23,14 @@
 // x3 -> 0
 // x4 -> 32 bit kernel entry point, _start location.
 _start:
+    mrs     x1, mpidr_el1
+    and     x1, x1, #3
+    cbz     x1, 2f
+    // We're not on the main core, so hang in an infinite wait loop
+1:  wfe
+    b       1b
+
+2:  // We're on the main core!
     // set the stack before our code.
     ldr x5, =_start
     mov sp, x5
