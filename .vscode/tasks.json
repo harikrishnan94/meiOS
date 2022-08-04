@@ -31,6 +31,28 @@
                     "beginsPattern": "Running"
                 }
             }
+        },
+        {
+            "label": "Run Mei Tests",
+            "type": "shell",
+            "command": "cargo",
+            "args": [
+                "test",
+                "--",
+                "-S",
+                "-s"
+            ],
+            "isBackground": true,
+            "runOptions": {
+                "instanceLimit": 1,
+                "reevaluateOnRerun": true,
+            },
+            "problemMatcher": {
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": "Running"
+                }
+            }
         }
     ]
 }

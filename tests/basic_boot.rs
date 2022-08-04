@@ -4,15 +4,17 @@
 #![test_runner(mei::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 
+use core::panic::PanicInfo;
 use mei::exit::ExitCode;
-mod kmain;
+use mei::println;
 
 #[no_mangle]
 pub extern "C" fn mei_main() -> ExitCode {
-    kmain::kmain()
+    test_main();
+    ExitCode::Success
 }
 
 #[test_case]
-fn trivial_assertion() {
-    assert_eq!(1, 1);
+fn test_println() {
+    println!("test_println output");
 }

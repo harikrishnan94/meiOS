@@ -2,6 +2,7 @@ extern "C" {
     fn _exit(code: i32) -> !;
 }
 
+#[repr(C)]
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum ExitCode {
     Success = 0,

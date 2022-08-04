@@ -1,7 +1,7 @@
 use atomic::{Atomic, Ordering};
 use core::arch::asm;
 
-#[derive(PartialEq, Eq, Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum RaspiBoard {
     ONE,
     TWO,
@@ -36,4 +36,9 @@ pub fn get_raspi_board() -> RaspiBoard {
         RASPI_BOARD.store(Some(board), Ordering::Release);
         get_raspi_board()
     }
+}
+
+#[test_case]
+fn test_raspi_board() {
+    assert_eq!(get_raspi_board(), RaspiBoard::THREE);
 }
