@@ -1,0 +1,8 @@
+{
+    "recommendations": [
+        "rust-lang.rust-analyzer",
+        "bungcip.better-toml",
+        "dan-c-underwood.arm",
+        "augustocdias.tasks-shell-input"
+    ]
+}

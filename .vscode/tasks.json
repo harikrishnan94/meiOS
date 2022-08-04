@@ -1,0 +1,40 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "rust: cargo build",
+            "type": "cargo",
+            "command": "xbuild",
+            "args": [
+                "--target=${workspaceFolder}/aarch64-unknown-none-softfloat.json"
+            ],
+            "problemMatcher": [
+                "$rustc"
+            ],
+            "group": "build",
+        },
+        {
+            "label": "Run Mei Kernel",
+            "type": "shell",
+            "command": "cargo",
+            "args": [
+                "xrun",
+                "--target=${workspaceFolder}/aarch64-unknown-none-softfloat.json",
+                "--",
+                "-S",
+                "-s"
+            ],
+            "isBackground": true,
+            "runOptions": {
+                "instanceLimit": 1,
+                "reevaluateOnRerun": true,
+            },
+            "problemMatcher": {
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": "Running"
+                }
+            }
+        }
+    ]
+}

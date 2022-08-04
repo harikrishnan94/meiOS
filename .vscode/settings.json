@@ -1,4 +1,0 @@
-{
-    "rust-analyzer.checkOnSave.allTargets": false,
-    "git.enableCommitSigning": true
-}
