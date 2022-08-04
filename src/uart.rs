@@ -12,7 +12,6 @@ impl Default for Uart {
     fn default() -> Self {
         let mut uart = Self {};
 
-        MIMO.init();
         uart.init();
 
         uart
