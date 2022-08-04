@@ -14,7 +14,6 @@ pub mod arch_regs;
 pub mod board_id;
 pub mod exit;
 pub mod mimo;
-pub mod panic;
 pub mod uart;
 
 global_asm!(include_str!("../boot/rpi3.S"));
