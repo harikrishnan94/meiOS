@@ -7,11 +7,18 @@
 use core::panic::PanicInfo;
 use mei::exit::ExitCode;
 use mei::println;
+use mei::test_panic_handler;
 
 #[no_mangle]
 pub extern "C" fn mei_main() -> ExitCode {
     test_main();
     ExitCode::Success
+}
+
+#[cfg(test)]
+#[panic_handler]
+fn panic(info: &PanicInfo) -> ! {
+    test_panic_handler(info)
 }
 
 #[test_case]
