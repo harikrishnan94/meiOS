@@ -7,23 +7,44 @@
         {
             "type": "lldb",
             "request": "custom",
-            "name": "QEMU",
+            "name": "Kernel",
             "targetCreateCommands": [
-                "target create ${input:cargotarget}"
+                "target create ${input:cargoruntarget}"
             ],
             "processCreateCommands": [
                 "gdb-remote localhost:1234"
             ],
             "preLaunchTask": "Run Mei Kernel",
+        },
+        {
+            "type": "lldb",
+            "request": "custom",
+            "name": "Tests",
+            "targetCreateCommands": [
+                "target create ${input:cargotesttarget}"
+            ],
+            "processCreateCommands": [
+                "gdb-remote localhost:1234"
+            ],
+            "preLaunchTask": "Run Mei Tests",
         }
     ],
     "inputs": [
         {
-            "id": "cargotarget",
+            "id": "cargoruntarget",
             "type": "command",
             "command": "shellCommand.execute",
             "args": {
-                "command": "cargo xrun --target aarch64-unknown-none-softfloat.json -- -DUMMY 2>&1 | grep -e '-DUMMY' | head -n 1 | awk '{print $(NF-1)}'",
+                "command": "cargo run -- -DUMMY 2>&1 | grep -e '-DUMMY' | head -n 1 | awk '{print $(NF-1)}'",
+                "description": "Get Target Name"
+            }
+        },
+        {
+            "id": "cargotesttarget",
+            "type": "command",
+            "command": "shellCommand.execute",
+            "args": {
+                "command": "cargo test -v -- -DUMMY 2>&1 | grep -e '-DUMMY' | head -n 1 | awk '{print $(NF-1)}'",
                 "description": "Get Target Name"
             }
         }

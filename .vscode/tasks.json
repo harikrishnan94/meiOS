@@ -4,10 +4,7 @@
         {
             "label": "rust: cargo build",
             "type": "cargo",
-            "command": "xbuild",
-            "args": [
-                "--target=${workspaceFolder}/aarch64-unknown-none-softfloat.json"
-            ],
+            "command": "build",
             "problemMatcher": [
                 "$rustc"
             ],
@@ -18,8 +15,29 @@
             "type": "shell",
             "command": "cargo",
             "args": [
-                "xrun",
-                "--target=${workspaceFolder}/aarch64-unknown-none-softfloat.json",
+                "run",
+                "--",
+                "-S",
+                "-s"
+            ],
+            "isBackground": true,
+            "runOptions": {
+                "instanceLimit": 1,
+                "reevaluateOnRerun": true,
+            },
+            "problemMatcher": {
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": "Running"
+                }
+            }
+        },
+        {
+            "label": "Run Mei Tests",
+            "type": "shell",
+            "command": "cargo",
+            "args": [
+                "test",
                 "--",
                 "-S",
                 "-s"

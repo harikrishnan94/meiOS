@@ -12,7 +12,6 @@ impl Default for Uart {
     fn default() -> Self {
         let mut uart = Self {};
 
-        MIMO.init();
         uart.init();
 
         uart
@@ -95,7 +94,7 @@ impl Uart {
         }
     }
 
-    pub(crate) fn putchar(&self, char: u8) {
+    pub fn putchar(&self, char: u8) {
         unsafe {
             // Wait for UART to become ready to transmit.
             while (MIMO.read::<{ UART0_FR }>() & (1 << 5)) != 0 {}
@@ -104,7 +103,7 @@ impl Uart {
         }
     }
 
-    pub(crate) fn getchar(&self) -> u8 {
+    pub fn getchar(&self) -> u8 {
         unsafe {
             // Wait for UART to have received something.
             while (MIMO.read::<{ UART0_FR }>() & (1 << 4)) != 0 {}
@@ -113,7 +112,7 @@ impl Uart {
         }
     }
 
-    pub(crate) fn write(&self, s: &str) {
+    pub fn write(&self, s: &str) {
         for char in s.as_bytes() {
             self.putchar(*char);
         }
@@ -126,7 +125,7 @@ impl Uart {
 }
 
 lazy_static! {
-    pub(crate) static ref UART0: Mutex<Uart> = {
+    pub static ref UART0: Mutex<Uart> = {
         let mut uart = Uart::default();
         uart.init();
         Mutex::new(uart)
@@ -157,4 +156,16 @@ macro_rules! println {
 #[doc(hidden)]
 pub fn _print(args: fmt::Arguments) {
     UART0.lock().write_fmt(args).unwrap();
+}
+
+#[test_case]
+fn test_println_simple() {
+    println!("test_println_simple output");
+}
+
+#[test_case]
+fn test_println_many() {
+    for _ in 0..10 {
+        println!("test_println_many output");
+    }
 }
