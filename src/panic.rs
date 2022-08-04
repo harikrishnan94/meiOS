@@ -1,10 +1,9 @@
 use core::panic::PanicInfo;
 
-extern "C" {
-    fn _exit(code: i32) -> !;
-}
+use crate::{exit::exit, exit::ExitCode, println};
 
 #[panic_handler]
 fn on_panic(_info: &PanicInfo) -> ! {
-    unsafe { _exit(-1) }
+    println!("{}", _info);
+    exit(ExitCode::Failure)
 }

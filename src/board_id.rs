@@ -8,15 +8,15 @@ pub enum RaspiBoard {
     THREE,
     FOUR,
     OTHER,
-    UNKNOWN,
 }
 
-static RASPI_BOARD: Atomic<RaspiBoard> = Atomic::new(RaspiBoard::UNKNOWN);
+static RASPI_BOARD: Atomic<Option<RaspiBoard>> = Atomic::new(None);
 
 #[allow(asm_sub_register)]
 pub fn get_raspi_board() -> RaspiBoard {
-    let mut board = RASPI_BOARD.load(Ordering::Relaxed);
-    if board == RaspiBoard::UNKNOWN {
+    if let Some(board) = RASPI_BOARD.load(Ordering::Relaxed) {
+        board
+    } else {
         let mut reg: u32;
         unsafe {
             asm!(
@@ -25,7 +25,7 @@ pub fn get_raspi_board() -> RaspiBoard {
             );
         }
 
-        board = match (reg >> 4) & 0xFFF {
+        let board = match (reg >> 4) & 0xFFF {
             0xB76 => RaspiBoard::ONE,
             0xC07 => RaspiBoard::TWO,
             0xD03 => RaspiBoard::THREE,
@@ -33,8 +33,7 @@ pub fn get_raspi_board() -> RaspiBoard {
             _ => RaspiBoard::OTHER,
         };
 
-        RASPI_BOARD.store(board, Ordering::Release);
+        RASPI_BOARD.store(Some(board), Ordering::Release);
+        get_raspi_board()
     }
-
-    board
 }
