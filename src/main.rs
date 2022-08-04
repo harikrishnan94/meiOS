@@ -1,16 +1,12 @@
 #![no_std]
 #![no_main]
-#![allow(incomplete_features)]
-#![feature(adt_const_params)]
 
 use core::arch::global_asm;
 
-use crate::board_id::{get_raspi_board, RaspiBoard};
-mod arch_regs;
-mod board_id;
-mod mimo;
-mod panic;
-mod uart;
+use mei::{
+    board_id::{get_raspi_board, RaspiBoard},
+    println,
+};
 
 global_asm!(include_str!("../boot/rpi3.S"));
 

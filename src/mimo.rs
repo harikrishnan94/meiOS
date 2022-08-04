@@ -15,7 +15,7 @@ fn get_mimo_base() -> *mut u32 {
     }
 }
 
-pub(crate) struct Mimo {
+pub struct Mimo {
     base: AtomicPtr<u32>,
 }
 
@@ -26,7 +26,7 @@ impl Mimo {
         }
     }
 
-    pub(crate) fn base(&self) -> Option<*mut u32> {
+    pub fn base(&self) -> Option<*mut u32> {
         let base = self.base.load(Ordering::Relaxed);
         if base != core::ptr::null_mut() {
             Some(base)
@@ -36,18 +36,18 @@ impl Mimo {
         }
     }
 
-    pub(crate) unsafe fn write<const R: ArchRegisters>(&self, data: u32) {
+    pub unsafe fn write<const R: ArchRegisters>(&self, data: u32) {
         core::ptr::write_volatile(
             self.base().unwrap().add(R as usize / size_of::<u32>()),
             data,
         )
     }
 
-    pub(crate) unsafe fn read<const R: ArchRegisters>(&self) -> u32 {
+    pub unsafe fn read<const R: ArchRegisters>(&self) -> u32 {
         core::ptr::read_volatile(self.base().unwrap().add(R as usize / size_of::<u32>()))
     }
 }
 
-pub(crate) static MIMO: Mimo = Mimo {
+pub static MIMO: Mimo = Mimo {
     base: AtomicPtr::new(core::ptr::null_mut()),
 };

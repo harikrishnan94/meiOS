@@ -2,7 +2,7 @@
 #[allow(dead_code)]
 #[repr(u32)]
 #[derive(PartialEq, Eq, Clone, Copy)]
-pub(crate) enum ArchRegisters {
+pub enum ArchRegisters {
     // The offsets for reach register.
     GPIO_BASE = 0x200000,
 
@@ -41,6 +41,6 @@ pub(crate) enum ArchRegisters {
 }
 
 impl ArchRegisters {
-    pub(crate) const UART0_DR: ArchRegisters = ArchRegisters::UART0_BASE;
-    pub(crate) const MBOX_READ: ArchRegisters = ArchRegisters::MBOX_BASE;
+    pub const UART0_DR: ArchRegisters = ArchRegisters::UART0_BASE;
+    pub const MBOX_READ: ArchRegisters = ArchRegisters::MBOX_BASE;
 }

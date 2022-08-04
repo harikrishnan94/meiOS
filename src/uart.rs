@@ -94,7 +94,7 @@ impl Uart {
         }
     }
 
-    pub(crate) fn putchar(&self, char: u8) {
+    pub fn putchar(&self, char: u8) {
         unsafe {
             // Wait for UART to become ready to transmit.
             while (MIMO.read::<{ UART0_FR }>() & (1 << 5)) != 0 {}
@@ -103,7 +103,7 @@ impl Uart {
         }
     }
 
-    pub(crate) fn getchar(&self) -> u8 {
+    pub fn getchar(&self) -> u8 {
         unsafe {
             // Wait for UART to have received something.
             while (MIMO.read::<{ UART0_FR }>() & (1 << 4)) != 0 {}
@@ -112,7 +112,7 @@ impl Uart {
         }
     }
 
-    pub(crate) fn write(&self, s: &str) {
+    pub fn write(&self, s: &str) {
         for char in s.as_bytes() {
             self.putchar(*char);
         }
@@ -125,7 +125,7 @@ impl Uart {
 }
 
 lazy_static! {
-    pub(crate) static ref UART0: Mutex<Uart> = {
+    pub static ref UART0: Mutex<Uart> = {
         let mut uart = Uart::default();
         uart.init();
         Mutex::new(uart)

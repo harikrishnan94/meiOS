@@ -14,7 +14,7 @@ pub enum RaspiBoard {
 static RASPI_BOARD: Atomic<RaspiBoard> = Atomic::new(RaspiBoard::UNKNOWN);
 
 #[allow(asm_sub_register)]
-pub(crate) fn get_raspi_board() -> RaspiBoard {
+pub fn get_raspi_board() -> RaspiBoard {
     let mut board = RASPI_BOARD.load(Ordering::Relaxed);
     if board == RaspiBoard::UNKNOWN {
         let mut reg: u32;
