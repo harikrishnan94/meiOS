@@ -1,6 +1,7 @@
 {
     "recommendations": [
         "rust-lang.rust-analyzer",
+        "vadimcn.vscode-lldb",
         "bungcip.better-toml",
         "dan-c-underwood.arm",
         "augustocdias.tasks-shell-input"
