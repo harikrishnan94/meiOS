@@ -232,12 +232,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "macros"
+version = "0.0.1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "mei"
 version = "0.0.1"
 dependencies = [
  "aarch64-cpu",
  "cargo-binutils",
  "lazy_static",
+ "macros",
  "qemu-exit",
  "spin 0.9.4",
  "tock-registers",

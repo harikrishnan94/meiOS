@@ -9,7 +9,6 @@ global_asm!(
     EL_BITS_OFFSET = const 2, /* CurrentEL's 2:3 contains the exception level */
     HYP_MODE_EL = const 2 /* Hypervisor mode EL is 2 */
 );
-global_asm!(include_str!("../asm/rpi3/vector_table.s"));
 
 /// Prepares the transition from EL2 to EL1.
 ///
@@ -32,7 +31,7 @@ unsafe fn prepare_switch_from_el2_to_el1(phy_stack_ptr: u64) {
             + SPSR_EL2::M::EL1h,
     );
 
-    // Second, let the link register point to kernel_init().
+    // Second, let the link register point to mei_main().
     ELR_EL2.set(crate::mei_main as *const () as u64);
 
     // Set up SP_EL1 (stack pointer), which will be used by EL1 once we "return" to it. Since there
@@ -44,6 +43,6 @@ unsafe fn prepare_switch_from_el2_to_el1(phy_stack_ptr: u64) {
 pub(crate) unsafe extern "C" fn _start_rust(phy_stack_ptr: u64) -> ! {
     prepare_switch_from_el2_to_el1(phy_stack_ptr);
 
-    // Use `eret` to "return" to EL1. This results in execution of kernel_init() in EL1.
+    // Use `eret` to "return" to EL1. This results in execution of mei_main() in EL1.
     asm::eret()
 }

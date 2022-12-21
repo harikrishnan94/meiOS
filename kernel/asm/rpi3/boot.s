@@ -40,5 +40,9 @@ _start:
     ldr x0, =_start
     mov sp, x0
 
+    /* Load vector_table into VBAR_EL1 */
+    ldr x0, =vector_table
+    msr VBAR_EL1, x0
+
     /* Jump to Rust code. x0 holds the function argument provided to _start_rust(). */
     b _start_rust
