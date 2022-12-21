@@ -1,6 +1,8 @@
 use core::panic::PanicInfo;
 
+const EXIT_PANIC: u32 = 2;
+
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
-    loop {}
+    crate::exit(EXIT_PANIC)
 }

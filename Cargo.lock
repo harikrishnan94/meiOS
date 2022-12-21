@@ -228,6 +228,7 @@ version = "0.0.1"
 dependencies = [
  "cargo-binutils",
  "lazy_static",
+ "qemu-exit",
  "spin 0.9.4",
  "tock-registers",
 ]
@@ -264,6 +265,12 @@ checksum = "57a8eca9f9c4ffde41714334dee777596264c7825420f521abc92b5b5deb63a5"
 dependencies = [
  "unicode-ident",
 ]
+
+[[package]]
+name = "qemu-exit"
+version = "3.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ff023245bfcc73fb890e1f8d5383825b3131cc920020a5c487d6f113dfc428a"
 
 [[package]]
 name = "quote"

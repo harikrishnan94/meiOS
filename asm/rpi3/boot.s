@@ -53,4 +53,4 @@ _start:
 
     /* call mei kernel */
     bl mei_main
-    b 1b
+    bl exit
