@@ -134,8 +134,8 @@ sync_handler:
     save_user_context
 
     mov x0, #1 /* Exception ID denoting sync exception */
-    mrs x1, esr_el1
-    mrs x2, elr_el1
+    mrs x1, ESR_EL1
+    mrs x2, ELR_EL1
     bl exception_handler
 
     restore_user_context
@@ -145,8 +145,8 @@ irq_handler:
     save_user_context
 
     mov x0, #2 /* Exception ID denoting sync exception */
-    mrs x1, esr_el1
-    mrs x2, elr_el1
+    mrs x1, ESR_EL1
+    mrs x2, ELR_EL1
     bl exception_handler
 
     restore_user_context

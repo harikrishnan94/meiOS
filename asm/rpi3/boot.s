@@ -4,12 +4,19 @@
 .globl _start
 _start:
     /* Load current running core ID into x0 */
-    mrs x0, mpidr_el1
-    and x0, x0, #3
+    mrs x0, MPIDR_EL1
+    and x0, x0, {CPUID_MASK}
     /* Exit if we're not in 0th core */
-    cmp x0, #0
+    cmp x0, {BOOT_CORE_ID}
+    bne 1f
 
-    /* We're in 0th core. Start exectuting the kernel */
+    /* Get current exception level in x0 */
+    mrs x0, CurrentEL
+    lsr x0, x0, {EL_BITS_OFFSET}
+    /* Exit if current exception level is not 2 (Hypervisor Level) */
+    cmp x0, {HYP_MODE_EL}
+
+    /* We're in 0th core and in EL 2. Start exectuting the kernel */
     beq 2f
 
 1:
@@ -17,40 +24,21 @@ _start:
     b 1b
 
 2:
-    /* Get current exception level in x0 */
-    mrs x0, currentel
-    lsr x0, x0, #2
-    /* Exit if current exception level is not 2 (Hypervisor Level) */
-    cmp x0, #2
-    bne 1b
-
-    /* Setup system control register */
-    msr sctlr_el1, xzr
-    mov x0, #(1 << 31) /* Enable AArch64 Mode */
-    msr hcr_el2, x0
-
-    /* Setup for fake exception return */
-    mov x0, #0b1111000101 /* Sets: (D, A, I, F, SP_EL1, EL1) */
-    msr spsr_el2, x0
-    adr x0, 3f
-    msr elr_el2, x0
-    eret
-
-    /* EL1 Entry (Kernel Mode) */
-3:
-    /* TODO: Setup MMU and enable Stack alignment check in sctlr_el1 */
-    /* setup stack pointer to enable C functions */
-    mov sp, #0x80000
-
     /* initialize BSS */
     ldr x0, =__bss_start
     ldr x1, =__bss_end
-    bl init_bss
+    cmp x0, x1
+    bge 4f
+3:
+    str xzr, [x0]
+    add x0, x0, #8
+    cmp x0, x1
+    bne 3b
 
-    /* Load vector_table into vbar_el1 */
-    ldr x0, =vector_table
-    msr vbar_el1, x0
+4:
+    /* setup stack pointer to enable C functions */
+    ldr x0, =_start
+    mov sp, x0
 
-    /* call mei kernel */
-    bl mei_main
-    bl exit
+    /* Jump to Rust code. x0 holds the function argument provided to _start_rust(). */
+    b _start_rust

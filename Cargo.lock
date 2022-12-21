@@ -3,6 +3,15 @@
 version = 3
 
 [[package]]
+name = "aarch64-cpu"
+version = "9.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3478265322ad2c3e68e88606b00e92c45e6f4c26b6d5e042c209254e0d56e9c1"
+dependencies = [
+ "tock-registers",
+]
+
+[[package]]
 name = "addr2line"
 version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -226,6 +235,7 @@ dependencies = [
 name = "mei"
 version = "0.0.1"
 dependencies = [
+ "aarch64-cpu",
  "cargo-binutils",
  "lazy_static",
  "qemu-exit",
