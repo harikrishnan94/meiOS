@@ -6,4 +6,4 @@ build-std = ["core", "compiler_builtins"]
 target = "aarch64-unknown-none-softfloat.json"
 
 [target.aarch64-unknown-none-softfloat]
-runner = "qemu-system-aarch64 -M raspi3b -cpu cortex-a53  -nographic -semihosting -kernel"
+runner = "./runner.sh"

@@ -1,29 +1,28 @@
 #![no_std]
 #![no_main]
-#![feature(custom_test_frameworks)]
-#![test_runner(mei::test_runner)]
-#![reexport_test_harness_main = "test_main"]
+#[macro_use]
+extern crate lazy_static;
 
-use core::panic::PanicInfo;
+use core::arch::global_asm;
+mod exception;
+mod gpio;
+mod panic;
+mod uart;
 
-use mei::{
-    exit::{exit, ExitCode},
-    println,
-};
-mod kmain;
+global_asm!(include_str!("../asm/rpi3/boot.s"));
+global_asm!(include_str!("../asm/rpi3/vector_table.s"));
 
 #[no_mangle]
-pub extern "C" fn mei_main() -> ExitCode {
-    kmain::kmain()
+pub(crate) extern "C" fn mei_main() {
+    println!("Welcome to meiOS");
 }
 
-#[test_case]
-fn trivial_assertion() {
-    assert_eq!(1, 1);
-}
-
-#[panic_handler]
-fn on_panic(_info: &PanicInfo) -> ! {
-    println!("{}", _info);
-    exit(ExitCode::Failure)
+#[no_mangle]
+pub(crate) extern "C" fn init_bss(bss_start: *mut u8, bss_end: *mut u8) {
+    unsafe {
+        let size = bss_end.offset_from(bss_start);
+        if size > 0 {
+            core::intrinsics::write_bytes(bss_start, 0, size as usize);
+        }
+    }
 }
