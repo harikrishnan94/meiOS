@@ -12,10 +12,7 @@ use tock_registers::{
     registers::InMemoryRegister,
 };
 
-use crate::{
-    println,
-    timer::{handle_timer_irq, is_timer_irq},
-};
+use crate::{gic::dispatch_peripheral_irq, println};
 
 global_asm!(include_str!("../asm/rpi3/exception.s"));
 
@@ -50,6 +47,7 @@ pub unsafe fn disable_irq() {
     );
 }
 
+/// Initialized by ASM
 #[no_mangle]
 static VECTOR_TABLE_BASE_ADDR: u64 = 0;
 
@@ -120,9 +118,7 @@ fn current_el_spn_sync(ec: &mut ExceptionContext) {
 
 #[exception_handler]
 fn current_el_spn_irq(ec: &mut ExceptionContext) {
-    if is_timer_irq() {
-        handle_timer_irq(ec);
-    } else {
+    if !dispatch_peripheral_irq(ec) {
         default_handler("current_el_spn_irq", ec);
     }
 }

@@ -2,9 +2,14 @@ use core::time::Duration;
 
 use aarch64_cpu::registers::{CNTP_CTL_EL0, CNTP_TVAL_EL0};
 use spin::Mutex;
-use tock_registers::interfaces::{Readable, Writeable};
+use tock_registers::interfaces::Writeable;
 
-use crate::{exception::ExceptionContext, println};
+use crate::{
+    exception::ExceptionContext,
+    gic::{register_interrupt_handler, IRQHandler, IRQNum, CNTP_EL0},
+    gpio::write_mmio_reg,
+    println,
+};
 
 /// Will be initialized by ASM (boot.s)
 #[no_mangle]
@@ -29,43 +34,50 @@ fn set_timer_interval_count() {
     CNTP_TVAL_EL0.set(timer);
 }
 
+const TIMER_IRQ_PENDING_BIT_NUM: IRQNum = 0;
+
+#[derive(Default)]
+struct TimerInterruptHandler {
+    ticks: Mutex<u64>,
+}
+
+impl IRQHandler for TimerInterruptHandler {
+    fn get_irq_pending_bit_num(&self) -> IRQNum {
+        TIMER_IRQ_PENDING_BIT_NUM
+    }
+
+    fn handle(&self, _ec: &mut ExceptionContext) {
+        let tick_count;
+        {
+            let mut ticks = self.ticks.lock();
+            tick_count = *ticks;
+            *ticks += 1;
+        }
+        if tick_count % TICKS_PER_SECOND == 0 {
+            println!(
+                "Time Elapsed Since Boot = {} s",
+                tick_count / TICKS_PER_SECOND
+            );
+        }
+        set_timer_interval_count();
+    }
+}
+
+lazy_static! {
+    static ref IRQ_HANDLER: TimerInterruptHandler = TimerInterruptHandler::default();
+}
+
 /// .
 ///
 /// # Safety
 ///
 /// Init Timer module
-pub unsafe fn init_timer() {
+pub unsafe fn enable() {
     set_timer_interval_count();
 
     // Enable timer and timer interrupt
     CNTP_CTL_EL0.write(CNTP_CTL_EL0::ENABLE::SET + CNTP_CTL_EL0::IMASK::CLEAR);
 
-    let cntp_el0 = 0x40000040 as *mut u64;
-    core::ptr::write_volatile(cntp_el0, 1 << 1);
-}
-
-pub(crate) fn is_timer_irq() -> bool {
-    let cntp_status_el0 = 0x40000060 as *mut u64;
-    unsafe {
-        core::ptr::read_volatile(cntp_status_el0) & (1 << 1) != 0
-            && CNTP_CTL_EL0.is_set(CNTP_CTL_EL0::ISTATUS)
-    }
-}
-
-static TICKS: Mutex<u64> = Mutex::new(0);
-
-pub(crate) fn handle_timer_irq(_ec: &mut ExceptionContext) {
-    let tick_count;
-    {
-        let mut ticks = TICKS.lock();
-        tick_count = *ticks;
-        *ticks += 1;
-    }
-    if tick_count % TICKS_PER_SECOND == 0 {
-        println!(
-            "Time Elapsed Since Boot = {} s",
-            tick_count / TICKS_PER_SECOND
-        );
-    }
-    set_timer_interval_count();
+    write_mmio_reg(CNTP_EL0, 1u64 << 1);
+    register_interrupt_handler(&*IRQ_HANDLER);
 }

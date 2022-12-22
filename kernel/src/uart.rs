@@ -3,6 +3,10 @@ use tock_registers::interfaces::{Readable, Writeable};
 use tock_registers::registers::{ReadOnly, ReadWrite, WriteOnly};
 use tock_registers::{register_bitfields, register_structs};
 
+use crate::exception::ExceptionContext;
+use crate::gic::{enable_irq, IRQHandler};
+use crate::gic::{register_interrupt_handler, IRQNum};
+
 register_structs! {
     Registers {
         // Data register
@@ -22,6 +26,9 @@ register_structs! {
         (0x034 => _reserved3),
         (0x038 => imsc: WriteOnly<u32, InterruptMaskSetClear::Register>),
         (0x03C => _reserved4),
+        (0x040 => mis: ReadOnly<u32, MaskedInterruptStatus::Register>),
+        (0x044 => icr: WriteOnly<u32, InterruptClear::Register>),
+        (0x048 => _reserved5),
         (0x1000 => @END),
     }
 }
@@ -40,28 +47,28 @@ impl Default for Pl011Uart {
     }
 }
 
+const UART_IRQ_NUM: IRQNum = 57;
+const UART_IRQ_PENDING_BIT_NUM: IRQNum = 19;
+
 impl Pl011Uart {
     fn init(&mut self) {
         self.0.cr.set(0);
         self.0.ibrd.set(26);
         self.0.fbrd.set(0);
 
-        self.0
-            .lcr
-            .write(LineControl::FEN::SET + LineControl::WLEN.val(2));
-        self.0.imsc.set(0);
+        self.0.lcr.write(LineControl::WLEN.val(2));
+        self.0.imsc.write(InterruptMaskSetClear::RXIM::SET);
         self.0
             .cr
             .write(Control::ENABLE::SET + Control::RXE::SET + Control::TXE::SET);
     }
 
     fn read_byte(&mut self) -> u8 {
-        while self.0.fr.is_set(Flag::RXFE) {}
         self.0.dr.get() as u8
     }
 
     fn write_byte(&mut self, byte: u8) {
-        while self.0.fr.is_set(Flag::TXFF) {}
+        while self.0.fr.is_set(Flag::BUSY) {}
         self.0.dr.set(byte as u32)
     }
 
@@ -70,6 +77,61 @@ impl Pl011Uart {
             self.write_byte(*char);
         }
     }
+
+    fn has_recv_irq(&self) -> bool {
+        self.0.mis.is_set(MaskedInterruptStatus::RXMIS)
+    }
+}
+
+lazy_static! {
+    static ref IRQ_HANDLER: UARTAccessor = UARTAccessor::default();
+}
+
+struct UARTAccessor {
+    uart: spin::Mutex<Pl011Uart>,
+}
+
+impl Default for UARTAccessor {
+    fn default() -> Self {
+        let mut uart = Pl011Uart::default();
+        uart.init();
+
+        Self {
+            uart: spin::Mutex::new(uart),
+        }
+    }
+}
+
+impl IRQHandler for UARTAccessor {
+    fn get_irq_pending_bit_num(&self) -> IRQNum {
+        UART_IRQ_PENDING_BIT_NUM
+    }
+
+    fn handle(&self, _ec: &mut ExceptionContext) {
+        let mut uart = self.uart.lock();
+        if !uart.has_recv_irq() {
+            return;
+        }
+        let char = uart.read_byte();
+        if char == b'\r' {
+            uart.write_byte(b'\n');
+        } else {
+            uart.write_byte(char);
+        }
+
+        // Clear Uart interrupt
+        uart.0.icr.write(InterruptClear::RXIC::SET);
+    }
+}
+
+/// .
+///
+/// # Safety
+///
+/// Initialize UART and Enable UART Interrupts
+pub unsafe fn enable() {
+    register_interrupt_handler(&*IRQ_HANDLER);
+    enable_irq(UART_IRQ_NUM);
 }
 
 impl Write for Pl011Uart {
@@ -92,18 +154,10 @@ macro_rules! println {
     ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
 }
 
-lazy_static! {
-    static ref UART0: spin::Mutex<Pl011Uart> = {
-        let mut uart = Pl011Uart::default();
-        uart.init();
-        spin::Mutex::new(uart)
-    };
-}
-
 /// Prints the given formatted string to the UART0 instance.
 #[doc(hidden)]
 pub fn _print(args: core::fmt::Arguments) {
-    UART0.lock().write_fmt(args).unwrap();
+    IRQ_HANDLER.uart.lock().write_fmt(args).unwrap();
 }
 
 // UART Register Fields:
@@ -120,6 +174,8 @@ register_bitfields![u32,
 
     // Flag Register
     Flag [
+        /// UART is busy transmitting data?
+        BUSY 3,
         /// Receive FIFO Empty?
         RXFE 4,
         /// Transmit FIFO Full?
@@ -155,7 +211,28 @@ register_bitfields![u32,
 
     // Interrupt Mask Set/Clear Register
     InterruptMaskSetClear [
-        /// All Masks
-        MASK OFFSET(0) NUMBITS(11) []
+        /// Receive interrupt mask
+        RXIM 4,
+
+        /// Transmit interrupt mask
+        TXIM 5
+    ],
+
+    // Masked Interrupt Status Register
+    MaskedInterruptStatus [
+        /// Receive masked interrupt status
+        RXMIS 4,
+
+        /// Transmit masked interrupt status
+        TXMIS 5
+    ],
+
+    // Interrupt Clear Register
+    InterruptClear [
+        /// Receive interrupt clear
+        RXIC 4,
+
+        /// Transmit interrupt clear
+        TXIC 5
     ]
 ];
