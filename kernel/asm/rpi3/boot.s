@@ -36,13 +36,18 @@ _start:
     bne 3b
 
 4:
+    /* Initialize Timer Frequency and Vector table Base addr */
+    ldr x0, =TIMER_FREQ /* Provided by Rust */
+    mrs x1, CNTFRQ_EL0
+    str x1, [x0]
+
+    ldr x0, =VECTOR_TABLE_BASE_ADDR /* Provided by Rust */
+    ldr x1, =vector_table /* Provided by Rust */
+    str x1, [x0]
+
     /* setup stack pointer to enable C functions */
     ldr x0, =_start
     mov sp, x0
 
-    /* Load vector_table into VBAR_EL1 */
-    ldr x0, =vector_table
-    msr VBAR_EL1, x0
-
-    /* Jump to Rust code. x0 holds the function argument provided to _start_rust(). */
+    /* Jump to Rust code. x0 and x1 holds the function argument provided to _start_rust(). */
     b _start_rust

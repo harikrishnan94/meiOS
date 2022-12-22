@@ -2,13 +2,67 @@
 extern crate macros;
 
 use aarch64_cpu::registers::*;
-use core::{arch::global_asm, fmt};
+use core::{
+    arch::{asm, global_asm},
+    fmt,
+};
 use macros::exception_handler;
-use tock_registers::{interfaces::Readable, registers::InMemoryRegister};
+use tock_registers::{
+    interfaces::{Readable, Writeable},
+    registers::InMemoryRegister,
+};
 
-use crate::println;
+use crate::{
+    println,
+    timer::{handle_timer_irq, is_timer_irq},
+};
 
 global_asm!(include_str!("../asm/rpi3/exception.s"));
+
+mod daifbits {
+    pub const IRQ_ENABLE: u8 = 0b0010;
+    pub const IRQ_DISABLE: u8 = 0b0000;
+}
+
+/// .
+///
+/// # Safety
+///
+/// Enables Asynchronous interrupts
+pub unsafe fn enable_irq() {
+    asm!(
+        "msr DAIFClr, {arg}",
+        arg = const daifbits::IRQ_ENABLE,
+        options(nomem, nostack, preserves_flags)
+    );
+}
+
+/// .
+///
+/// # Safety
+///
+/// Disables Asynchronous interrupts
+pub unsafe fn disable_irq() {
+    asm!(
+        "msr DAIFClr, {arg}",
+        arg = const daifbits::IRQ_DISABLE,
+        options(nomem, nostack, preserves_flags)
+    );
+}
+
+#[no_mangle]
+static VECTOR_TABLE_BASE_ADDR: u64 = 0;
+
+/// .
+///
+/// # Safety
+///
+/// Loads vector_table address and stores in VBAR_EL1, setup exception handlers
+pub unsafe fn handler_init() {
+    let vt_base = core::ptr::read_volatile(&VECTOR_TABLE_BASE_ADDR);
+    println!("Loaded Exception vector table from 0x{vt_base:x}");
+    VBAR_EL1.set(vt_base);
+}
 
 /// Wrapper structs for memory copies of registers.
 #[repr(transparent)]
@@ -18,7 +72,7 @@ struct EsrEL1(InMemoryRegister<u64, ESR_EL1::Register>);
 
 /// The exception context as it is stored on the stack on exception entry.
 #[repr(C)]
-struct ExceptionContext {
+pub(crate) struct ExceptionContext {
     /// General Purpose Registers.
     gpr: [u64; 30],
 
@@ -66,7 +120,11 @@ fn current_el_spn_sync(ec: &mut ExceptionContext) {
 
 #[exception_handler]
 fn current_el_spn_irq(ec: &mut ExceptionContext) {
-    default_handler("current_el_spn_irq", ec);
+    if is_timer_irq() {
+        handle_timer_irq(ec);
+    } else {
+        default_handler("current_el_spn_irq", ec);
+    }
 }
 
 #[exception_handler]
