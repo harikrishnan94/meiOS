@@ -140,7 +140,9 @@ fn lower_el_aarch64_sync(ec: &mut ExceptionContext) {
 
 #[exception_handler]
 fn lower_el_aarch64_irq(ec: &mut ExceptionContext) {
-    default_handler("lower_el_aarch64_irq", ec);
+    if !dispatch_peripheral_irq(ec) {
+        default_handler("lower_el_aarch64_irq", ec);
+    }
 }
 
 #[exception_handler]
