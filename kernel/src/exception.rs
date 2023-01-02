@@ -47,9 +47,10 @@ pub unsafe fn disable_irq() {
     );
 }
 
-/// Initialized by ASM
-#[no_mangle]
-static VECTOR_TABLE_BASE_ADDR: u64 = 0;
+extern "C" {
+    /// Provided by ASM
+    static vector_table: u64;
+}
 
 /// .
 ///
@@ -57,7 +58,7 @@ static VECTOR_TABLE_BASE_ADDR: u64 = 0;
 ///
 /// Loads vector_table address and stores in VBAR_EL1, setup exception handlers
 pub unsafe fn handler_init() {
-    let vt_base = core::ptr::read_volatile(&VECTOR_TABLE_BASE_ADDR);
+    let vt_base = &vector_table as *const u64 as u64;
     println!("Loaded Exception vector table from 0x{vt_base:x}");
     VBAR_EL1.set(vt_base);
 }

@@ -41,10 +41,6 @@ _start:
     mrs x1, CNTFRQ_EL0
     str x1, [x0]
 
-    ldr x0, =VECTOR_TABLE_BASE_ADDR /* Provided by Rust */
-    ldr x1, =vector_table /* Provided by Rust */
-    str x1, [x0]
-
     /* setup stack pointer to enable C functions */
     ldr x0, =_start
     mov sp, x0
