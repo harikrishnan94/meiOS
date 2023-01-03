@@ -1,4 +1,4 @@
-use aarch64_cpu::{asm, registers::*};
+use aarch64_cpu::registers::*;
 use core::arch::global_asm;
 use tock_registers::interfaces::Writeable;
 
@@ -15,7 +15,7 @@ global_asm!(
 /// # Safety
 ///
 /// - The HW state of EL1 must be prepared in a sound way.
-unsafe fn prepare_switch_from_el2_to_el1(phy_stack_ptr: u64) {
+pub unsafe fn switch_from_el2_to_el1(phy_stack_ptr: u64, phy_el1_main: *const ()) {
     // Set EL1 execution state to AArch64.
     HCR_EL2.write(HCR_EL2::RW::EL1IsAarch64);
 
@@ -32,30 +32,19 @@ unsafe fn prepare_switch_from_el2_to_el1(phy_stack_ptr: u64) {
     );
 
     // Second, let the link register point to mei_main().
-    ELR_EL2.set(crate::mei_main as *const () as u64);
+    ELR_EL2.set(phy_el1_main as u64);
 
     // Set up SP_EL1 (stack pointer), which will be used by EL1 once we "return" to it. Since there
     // are no plans to ever return to EL2, just re-use the same stack.
     SP_EL1.set(phy_stack_ptr);
 }
 
-#[no_mangle]
-pub(crate) unsafe extern "C" fn _start_rust(phy_stack_ptr: u64) -> ! {
-    prepare_switch_from_el2_to_el1(phy_stack_ptr);
-
-    // Use `eret` to "return" to EL1. This results in execution of mei_main() in EL1.
-    asm::eret()
-}
-
-const EL0_STACK_SIZE: usize = 8192;
-static EL0_STACK: [u8; EL0_STACK_SIZE] = [0; EL0_STACK_SIZE];
-
 /// Prepares the transition from EL1 to EL0.
 ///
 /// # Safety
 ///
 /// - The HW state of EL0 must be prepared in a sound way.
-unsafe fn prepare_switch_from_el1_to_el0(phy_stack_ptr: u64) {
+pub unsafe fn switch_from_el1_to_el0(phy_stack_ptr: u64, phy_el0_main: *const ()) {
     // Setup for fake exception return
 
     // First, fake a saved program status where all interrupts are unmasked and SP_EL0 was used as a
@@ -69,17 +58,9 @@ unsafe fn prepare_switch_from_el1_to_el0(phy_stack_ptr: u64) {
     );
 
     // Second, let the link register point to el0_main().
-    ELR_EL1.set(crate::el0_main as *const () as u64);
+    ELR_EL1.set(phy_el0_main as u64);
 
     // Set up SP_EL0 (stack pointer), which will be used by EL0 once we "return" to it. Since there
     // are no plans to ever return to EL1, just re-use the same stack.
     SP_EL0.set(phy_stack_ptr);
-}
-
-#[no_mangle]
-pub(crate) unsafe extern "C" fn drop_to_el0() -> ! {
-    prepare_switch_from_el1_to_el0(EL0_STACK.as_ptr() as u64);
-
-    // Use `eret` to "return" to EL0. This results in execution of el0_main() in EL0.
-    asm::eret()
 }

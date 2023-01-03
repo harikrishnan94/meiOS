@@ -5,6 +5,7 @@
 #[macro_use]
 extern crate lazy_static;
 
+pub mod boot;
 pub mod exception;
 pub mod gic;
 pub mod gpio;
