@@ -4,20 +4,16 @@ use tock_registers::interfaces::Readable;
 
 use crate::{
     exception::ExceptionContext,
-    gpio::{read_mmio_reg, write_mmio_reg},
+    mimo::{read_reg, write_reg, CNTP_STATUS_EL0, PERIPHERAL_IC_BASE},
 };
 
-pub(crate) const CNTP_EL0: u64 = 0x40000040;
-pub(crate) const CNTP_STATUS_EL0: u64 = 0x40000060;
-
-const IRQ_BASE_ADDR: u64 = 0x3F000000;
-const IRQ_BASIC_PENDING: u64 = IRQ_BASE_ADDR + 0xB200;
-const ENABLE_IRQS_1: u64 = IRQ_BASE_ADDR + 0xB210;
-const ENABLE_IRQS_2: u64 = IRQ_BASE_ADDR + 0xB214;
-const ENABLE_BASIC_IRQS: u64 = IRQ_BASE_ADDR + 0xB218;
-const DISABLE_IRQS_1: u64 = IRQ_BASE_ADDR + 0xB21C;
-const DISABLE_IRQS_2: u64 = IRQ_BASE_ADDR + 0xB220;
-const DISABLE_BASIC_IRQS: u64 = IRQ_BASE_ADDR + 0xB224;
+const IRQ_BASIC_PENDING: usize = PERIPHERAL_IC_BASE;
+const ENABLE_IRQS_1: usize = PERIPHERAL_IC_BASE + 0x10;
+const ENABLE_IRQS_2: usize = PERIPHERAL_IC_BASE + 0x14;
+const ENABLE_BASIC_IRQS: usize = PERIPHERAL_IC_BASE + 0x18;
+const DISABLE_IRQS_1: usize = PERIPHERAL_IC_BASE + 0x1C;
+const DISABLE_IRQS_2: usize = PERIPHERAL_IC_BASE + 0x20;
+const DISABLE_BASIC_IRQS: usize = PERIPHERAL_IC_BASE + 0x24;
 
 pub(crate) type IRQNum = u32;
 const MAX_IRQ_NUM: u32 = 64;
@@ -52,9 +48,9 @@ lazy_static! {
 ///
 /// Initialize BCM2537 Interrupt controller
 pub unsafe fn init_gic() {
-    write_mmio_reg(DISABLE_IRQS_1, 0xffffffffu32);
-    write_mmio_reg(DISABLE_IRQS_2, 0xffffffffu32);
-    write_mmio_reg(DISABLE_BASIC_IRQS, 0xffffffffu32);
+    write_reg(DISABLE_IRQS_1, 0xffffffffu32);
+    write_reg(DISABLE_IRQS_2, 0xffffffffu32);
+    write_reg(DISABLE_BASIC_IRQS, 0xffffffffu32);
 }
 
 pub(crate) fn register_interrupt_handler(irq_hand: &'static dyn IRQHandler) {
@@ -64,13 +60,13 @@ pub(crate) fn register_interrupt_handler(irq_hand: &'static dyn IRQHandler) {
 
 fn is_timer_irq() -> bool {
     unsafe {
-        read_mmio_reg::<u64>(CNTP_STATUS_EL0) & (1 << 1) != 0
+        read_reg::<u64, _>(CNTP_STATUS_EL0) & (1 << 1) != 0
             && CNTP_CTL_EL0.is_set(CNTP_CTL_EL0::ISTATUS)
     }
 }
 
 pub(crate) fn dispatch_peripheral_irq(ec: &mut ExceptionContext) -> bool {
-    let irq_pending = unsafe { read_mmio_reg::<u32>(IRQ_BASIC_PENDING) };
+    let irq_pending = unsafe { read_reg::<u32, _>(IRQ_BASIC_PENDING) };
     let mut handled = false;
 
     for i in 0..31 {
@@ -95,11 +91,11 @@ pub(crate) fn dispatch_peripheral_irq(ec: &mut ExceptionContext) -> bool {
 
 pub(crate) unsafe fn enable_irq(irq_num: IRQNum) {
     if irq_num < 8 {
-        write_mmio_reg(ENABLE_BASIC_IRQS, 1u32 << irq_num);
+        write_reg(ENABLE_BASIC_IRQS, 1u32 << irq_num);
     } else if irq_num < 32 {
-        write_mmio_reg(ENABLE_IRQS_1, 1u32 << irq_num);
+        write_reg(ENABLE_IRQS_1, 1u32 << irq_num);
     } else {
         let irq_num = irq_num - 32;
-        write_mmio_reg(ENABLE_IRQS_2, 1u32 << irq_num);
+        write_reg(ENABLE_IRQS_2, 1u32 << irq_num);
     }
 }

@@ -39,7 +39,7 @@ impl Default for Pl011Uart {
     fn default() -> Self {
         unsafe {
             Self(
-                (crate::gpio::UART_BASE_ADDR as *mut Registers)
+                (crate::mimo::PL011_UART_BASE as *mut Registers)
                     .as_mut()
                     .unwrap(),
             )
