@@ -1,5 +1,6 @@
 /* The physical address at which the the kernel binary will be loaded by the Raspberry's firmware */
 binary_load_addr = 0x80000;
+page_size = 4096;
 
 ENTRY(_start)
 
@@ -20,24 +21,31 @@ PHDRS
 SECTIONS
 {
     . = binary_load_addr;
+
+    /* Used to identify the size of kernel image */
+    __kernel_start_marker = .;
+
+    /* Mark the start of kernel stack (grows downwards) */
+    __kernel_stack_start_marker = .;
+
     .text :
     {
         KEEP(*(.text.boot))
         *(.text)
     }
-    . = ALIGN(4096); /* align to page size */
+    . = ALIGN(page_size);
 
     .rodata :
     {
         *(.rodata)
     }
-    . = ALIGN(4096); /* align to page size */
+    . = ALIGN(page_size);
 
     .data :
     {
         *(.data)
     }
-    . = ALIGN(4096); /* align to page size */
+    . = ALIGN(page_size);
 
     .bss :
     {
@@ -45,5 +53,8 @@ SECTIONS
         *(.bss)
         __bss_end = .;
     }
-    . = ALIGN(4096); /* align to page size */
+    . = ALIGN(page_size);
+
+    /* Used to identify the size of kernel image */
+    __kernel_end_marker = .;
 }

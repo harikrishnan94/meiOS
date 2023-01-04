@@ -8,6 +8,7 @@ extern crate lazy_static;
 pub mod boot;
 pub mod exception;
 pub mod gic;
+pub mod kimage;
 pub mod mimo;
 pub mod panic;
 pub mod static_bump_alloc;

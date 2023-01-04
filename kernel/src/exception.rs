@@ -4,6 +4,7 @@ extern crate macros;
 use aarch64_cpu::registers::*;
 use core::{
     arch::{asm, global_asm},
+    cell::UnsafeCell,
     fmt,
 };
 use macros::exception_handler;
@@ -47,9 +48,10 @@ pub unsafe fn disable_irq() {
     );
 }
 
+#[allow(improper_ctypes)]
 extern "C" {
     /// Provided by ASM
-    static vector_table: u64;
+    static vector_table: UnsafeCell<()>;
 }
 
 /// .
@@ -58,7 +60,7 @@ extern "C" {
 ///
 /// Loads vector_table address and stores in VBAR_EL1, setup exception handlers
 pub unsafe fn handler_init() {
-    let vt_base = &vector_table as *const u64 as u64;
+    let vt_base = vector_table.get() as u64;
     println!("Loaded Exception vector table from 0x{vt_base:x}");
     VBAR_EL1.set(vt_base);
 }

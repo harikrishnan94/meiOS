@@ -6,20 +6,24 @@
 use aarch64_cpu::{asm, registers::*};
 use libmei::{
     boot::{switch_from_el1_to_el0, switch_from_el2_to_el1},
-    exception, print, println, timer, uart,
+    exception,
+    kimage::{kernel_image_size, kernel_stack_base},
+    println, timer, uart,
 };
 use tock_registers::interfaces::Readable;
 
 fn mei_main() -> ! {
-    print!("\nWelcome to meiOS... ");
-    println!("We're at Exception Level {}", CurrentEL.read(CurrentEL::EL));
+    println!("\nWelcome to meiOS..");
+    println!("\tKernel Size: {}", kernel_image_size());
+    println!("\tException Level: {}", CurrentEL.read(CurrentEL::EL));
+    println!("\tKernel Stack Base: 0x{:X}", kernel_stack_base());
 
     unsafe {
         timer::enable();
         uart::enable();
         exception::handler_init();
         exception::enable_irq();
-        drop_to_el0()
+        drop_to_el0();
     }
 }
 
