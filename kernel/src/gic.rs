@@ -3,17 +3,19 @@ use spin::mutex::Mutex;
 use tock_registers::interfaces::Readable;
 
 use crate::{
+    address::PhysicalAddress,
+    error::Result,
     exception::ExceptionContext,
-    mimo::{read_reg, write_reg, CNTP_STATUS_EL0, PERIPHERAL_IC_BASE},
+    mimo::{CNTP_STATUS_EL0, MIMORW, PERIPHERAL_IC_BASE},
 };
 
-const IRQ_BASIC_PENDING: usize = PERIPHERAL_IC_BASE;
-const ENABLE_IRQS_1: usize = PERIPHERAL_IC_BASE + 0x10;
-const ENABLE_IRQS_2: usize = PERIPHERAL_IC_BASE + 0x14;
-const ENABLE_BASIC_IRQS: usize = PERIPHERAL_IC_BASE + 0x18;
-const DISABLE_IRQS_1: usize = PERIPHERAL_IC_BASE + 0x1C;
-const DISABLE_IRQS_2: usize = PERIPHERAL_IC_BASE + 0x20;
-const DISABLE_BASIC_IRQS: usize = PERIPHERAL_IC_BASE + 0x24;
+const IRQ_BASIC_PENDING: PhysicalAddress = PERIPHERAL_IC_BASE;
+const ENABLE_IRQS_1: PhysicalAddress = PERIPHERAL_IC_BASE + 0x10usize;
+const ENABLE_IRQS_2: PhysicalAddress = PERIPHERAL_IC_BASE + 0x14usize;
+const ENABLE_BASIC_IRQS: PhysicalAddress = PERIPHERAL_IC_BASE + 0x18usize;
+const DISABLE_IRQS_1: PhysicalAddress = PERIPHERAL_IC_BASE + 0x1Cusize;
+const DISABLE_IRQS_2: PhysicalAddress = PERIPHERAL_IC_BASE + 0x20usize;
+const DISABLE_BASIC_IRQS: PhysicalAddress = PERIPHERAL_IC_BASE + 0x24usize;
 
 pub(crate) type IRQNum = u32;
 const MAX_IRQ_NUM: u32 = 64;
@@ -47,10 +49,11 @@ lazy_static! {
 /// # Safety
 ///
 /// Initialize BCM2537 Interrupt controller
-pub unsafe fn init_gic() {
-    write_reg(DISABLE_IRQS_1, 0xffffffffu32);
-    write_reg(DISABLE_IRQS_2, 0xffffffffu32);
-    write_reg(DISABLE_BASIC_IRQS, 0xffffffffu32);
+pub unsafe fn init_gic() -> Result<()> {
+    DISABLE_IRQS_1.write_reg(0xffffffffu32)?;
+    DISABLE_IRQS_2.write_reg(0xffffffffu32)?;
+    DISABLE_BASIC_IRQS.write_reg(0xffffffffu32)?;
+    Ok(())
 }
 
 pub(crate) fn register_interrupt_handler(irq_hand: &'static dyn IRQHandler) {
@@ -58,15 +61,15 @@ pub(crate) fn register_interrupt_handler(irq_hand: &'static dyn IRQHandler) {
     REGISTERED_IRQ_HANDLERS.lock()[irq_num] = IRQHandlerEntry::new(irq_hand);
 }
 
-fn is_timer_irq() -> bool {
-    unsafe {
-        read_reg::<u64, _>(CNTP_STATUS_EL0) & (1 << 1) != 0
+fn is_timer_irq() -> Result<bool> {
+    Ok(unsafe {
+        CNTP_STATUS_EL0.read_reg::<u64>()? & (1 << 1) != 0
             && CNTP_CTL_EL0.is_set(CNTP_CTL_EL0::ISTATUS)
-    }
+    })
 }
 
-pub(crate) fn dispatch_peripheral_irq(ec: &mut ExceptionContext) -> bool {
-    let irq_pending = unsafe { read_reg::<u32, _>(IRQ_BASIC_PENDING) };
+pub(crate) fn dispatch_peripheral_irq(ec: &mut ExceptionContext) -> Result<bool> {
+    let irq_pending = unsafe { IRQ_BASIC_PENDING.read_reg::<u32>()? };
     let mut handled = false;
 
     for i in 0..31 {
@@ -78,7 +81,7 @@ pub(crate) fn dispatch_peripheral_irq(ec: &mut ExceptionContext) -> bool {
         }
     }
 
-    if is_timer_irq() {
+    if is_timer_irq()? {
         REGISTERED_IRQ_HANDLERS.lock()[0]
             .0
             .as_ref()
@@ -86,16 +89,16 @@ pub(crate) fn dispatch_peripheral_irq(ec: &mut ExceptionContext) -> bool {
             .handle(ec);
         handled = true
     }
-    handled
+    Ok(handled)
 }
 
-pub(crate) unsafe fn enable_irq(irq_num: IRQNum) {
+pub(crate) unsafe fn enable_irq(irq_num: IRQNum) -> Result<()> {
     if irq_num < 8 {
-        write_reg(ENABLE_BASIC_IRQS, 1u32 << irq_num);
+        return ENABLE_BASIC_IRQS.write_reg(1u32 << irq_num);
     } else if irq_num < 32 {
-        write_reg(ENABLE_IRQS_1, 1u32 << irq_num);
+        return ENABLE_IRQS_1.write_reg(1u32 << irq_num);
     } else {
         let irq_num = irq_num - 32;
-        write_reg(ENABLE_IRQS_2, 1u32 << irq_num);
+        return ENABLE_IRQS_2.write_reg(1u32 << irq_num);
     }
 }

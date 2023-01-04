@@ -5,9 +5,10 @@ use spin::Mutex;
 use tock_registers::interfaces::Writeable;
 
 use crate::{
+    error::Result,
     exception::ExceptionContext,
     gic::{register_interrupt_handler, IRQHandler, IRQNum},
-    mimo::{write_reg, CNTP_EL0},
+    mimo::{CNTP_EL0, MIMORW},
     println,
 };
 
@@ -72,12 +73,13 @@ lazy_static! {
 /// # Safety
 ///
 /// Init Timer module
-pub unsafe fn enable() {
+pub unsafe fn enable() -> Result<()> {
     set_timer_interval_count();
 
     // Enable timer and timer interrupt
     CNTP_CTL_EL0.write(CNTP_CTL_EL0::ENABLE::SET + CNTP_CTL_EL0::IMASK::CLEAR);
 
-    write_reg(CNTP_EL0, 1u64 << 1);
+    CNTP_EL0.write_reg(1u64 << 1)?;
     register_interrupt_handler(&*IRQ_HANDLER);
+    Ok(())
 }

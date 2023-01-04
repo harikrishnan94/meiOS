@@ -19,8 +19,8 @@ fn mei_main() -> ! {
     println!("\tKernel Stack Base: 0x{:X}", kernel_stack_base());
 
     unsafe {
-        timer::enable();
-        uart::enable();
+        uart::irq_enable().unwrap();
+        timer::enable().unwrap();
         exception::handler_init();
         exception::enable_irq();
         drop_to_el0();

@@ -2,7 +2,7 @@
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, ItemFn};
+use syn::{parse_macro_input, DeriveInput, ItemFn};
 
 #[proc_macro_attribute]
 pub fn exception_handler(_attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -88,6 +88,69 @@ pub fn exception_handler(_attr: TokenStream, item: TokenStream) -> TokenStream {
         #[naked]
         pub unsafe extern "C" fn #exception_handler_func () {
             core::arch::asm!(#asm_block, options(noreturn));
+        }
+    };
+
+    gen.into()
+}
+
+#[proc_macro_derive(AddressOps)]
+pub fn derive_address_ops(item: TokenStream) -> TokenStream {
+    let ast = parse_macro_input!(item as DeriveInput);
+    let name = &ast.ident;
+    let gen = quote! {
+        impl const Address for #name {
+            fn as_raw_ptr(&self) -> usize {
+                self.0
+            }
+
+            fn as_ptr<T: Sized>(&self) -> *const T {
+                self.0 as *const T
+            }
+
+            fn as_mut_ptr<T: Sized>(&self) -> *mut T {
+                self.0 as *mut T
+            }
+        }
+
+        impl const core::ops::Add<isize> for #name {
+            type Output = Self;
+
+            fn add(self, val: isize) -> Self {
+                Self((self.0 as isize + val) as usize)
+            }
+        }
+
+        impl const core::ops::Sub<isize> for #name {
+            type Output = Self;
+
+            fn sub(self, val: isize) -> Self {
+                Self((self.0 as isize - val) as usize)
+            }
+        }
+
+        impl const core::ops::Add<usize> for #name {
+            type Output = Self;
+
+            fn add(self, val: usize) -> Self {
+                Self(self.0 + val)
+            }
+        }
+
+        impl const core::ops::Sub<usize> for #name {
+            type Output = Self;
+
+            fn sub(self, val: usize) -> Self {
+                Self(self.0 - val)
+            }
+        }
+
+        impl const core::ops::Sub for #name {
+            type Output = isize;
+
+            fn sub(self, other: Self) -> isize {
+                (self.0 - other.0) as isize
+            }
         }
     };
 

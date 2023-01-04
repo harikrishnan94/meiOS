@@ -3,6 +3,8 @@ use core::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
+use crate::error::{Error, Result};
+
 const DEF_MEMORY_REGION_LEN: usize = 8192;
 
 pub struct BumpAllocator<const MEMORY_REGION_LEN: usize> {
@@ -18,7 +20,7 @@ impl<const MEMORY_REGION_LEN: usize> BumpAllocator<MEMORY_REGION_LEN> {
         }
     }
 
-    pub fn allocate<'a, T: Sized>(&self, val: T) -> Option<&'a mut T> {
+    pub fn allocate<'a, T: Sized>(&self, val: T) -> Result<&'a mut T> {
         loop {
             let used = self.memory_region_used.load(Ordering::Acquire);
             let new = used + size_of::<T>();
@@ -34,11 +36,11 @@ impl<const MEMORY_REGION_LEN: usize> BumpAllocator<MEMORY_REGION_LEN> {
                             .as_mut()
                             .unwrap();
                         ptr.write(val);
-                        return Some(ptr.assume_init_mut());
+                        return Ok(ptr.assume_init_mut());
                     }
                 }
             } else {
-                return None;
+                return Err(Error::BumpAllocatorOOM(MEMORY_REGION_LEN));
             }
         }
     }

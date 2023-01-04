@@ -121,7 +121,7 @@ fn current_el_spn_sync(ec: &mut ExceptionContext) {
 
 #[exception_handler]
 fn current_el_spn_irq(ec: &mut ExceptionContext) {
-    if !dispatch_peripheral_irq(ec) {
+    if !dispatch_peripheral_irq(ec).unwrap() {
         default_handler("current_el_spn_irq", ec);
     }
 }
@@ -143,7 +143,7 @@ fn lower_el_aarch64_sync(ec: &mut ExceptionContext) {
 
 #[exception_handler]
 fn lower_el_aarch64_irq(ec: &mut ExceptionContext) {
-    if !dispatch_peripheral_irq(ec) {
+    if !dispatch_peripheral_irq(ec).unwrap() {
         default_handler("lower_el_aarch64_irq", ec);
     }
 }

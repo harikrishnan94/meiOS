@@ -3,9 +3,14 @@ use tock_registers::interfaces::{Readable, Writeable};
 use tock_registers::registers::{ReadOnly, ReadWrite, WriteOnly};
 use tock_registers::{register_bitfields, register_structs};
 
-use crate::exception::ExceptionContext;
-use crate::gic::{enable_irq, IRQHandler};
-use crate::gic::{register_interrupt_handler, IRQNum};
+use crate::{
+    address::Address,
+    error::Result,
+    exception::ExceptionContext,
+    gic::{enable_irq, register_interrupt_handler, IRQHandler, IRQNum},
+    mimo::PL011_UART_BASE,
+    vm::phy_to_virt,
+};
 
 register_structs! {
     Registers {
@@ -35,22 +40,20 @@ register_structs! {
 
 struct Pl011Uart(&'static mut Registers);
 
-impl Default for Pl011Uart {
-    fn default() -> Self {
-        unsafe {
-            Self(
-                (crate::mimo::PL011_UART_BASE as *mut Registers)
-                    .as_mut()
-                    .unwrap(),
-            )
-        }
-    }
-}
-
 const UART_IRQ_NUM: IRQNum = 57;
 const UART_IRQ_PENDING_BIT_NUM: IRQNum = 19;
 
 impl Pl011Uart {
+    fn default() -> Result<Self> {
+        unsafe {
+            Ok(Self(
+                (phy_to_virt(PL011_UART_BASE)?.as_mut_ptr::<Registers>())
+                    .as_mut()
+                    .unwrap(),
+            ))
+        }
+    }
+
     fn init(&mut self) {
         self.0.cr.set(0);
         self.0.ibrd.set(26);
@@ -84,21 +87,21 @@ impl Pl011Uart {
 }
 
 lazy_static! {
-    static ref IRQ_HANDLER: UARTAccessor = UARTAccessor::default();
+    static ref IRQ_HANDLER: UARTAccessor = UARTAccessor::default().unwrap();
 }
 
 struct UARTAccessor {
     uart: spin::Mutex<Pl011Uart>,
 }
 
-impl Default for UARTAccessor {
-    fn default() -> Self {
-        let mut uart = Pl011Uart::default();
+impl UARTAccessor {
+    fn default() -> Result<Self> {
+        let mut uart = Pl011Uart::default()?;
         uart.init();
 
-        Self {
+        Ok(Self {
             uart: spin::Mutex::new(uart),
-        }
+        })
     }
 }
 
@@ -129,9 +132,9 @@ impl IRQHandler for UARTAccessor {
 /// # Safety
 ///
 /// Initialize UART and Enable UART Interrupts
-pub unsafe fn enable() {
+pub unsafe fn irq_enable() -> Result<()> {
     register_interrupt_handler(&*IRQ_HANDLER);
-    enable_irq(UART_IRQ_NUM);
+    enable_irq(UART_IRQ_NUM)
 }
 
 impl Write for Pl011Uart {
