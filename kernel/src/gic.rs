@@ -4,9 +4,10 @@ use tock_registers::interfaces::Readable;
 
 use crate::{
     address::PhysicalAddress,
+    address_map::{CNTP_STATUS_EL0, PERIPHERAL_IC_BASE},
     error::Result,
     exception::ExceptionContext,
-    mimo::{CNTP_STATUS_EL0, MIMORW, PERIPHERAL_IC_BASE},
+    mimo::MIMORW,
 };
 
 const IRQ_BASIC_PENDING: PhysicalAddress = PERIPHERAL_IC_BASE;

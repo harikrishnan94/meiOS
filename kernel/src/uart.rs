@@ -5,10 +5,10 @@ use tock_registers::{register_bitfields, register_structs};
 
 use crate::{
     address::Address,
+    address_map::PL011_UART_BASE,
     error::Result,
     exception::ExceptionContext,
     gic::{enable_irq, register_interrupt_handler, IRQHandler, IRQNum},
-    mimo::PL011_UART_BASE,
     vm::phy_to_virt,
 };
 

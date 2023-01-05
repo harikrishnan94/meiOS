@@ -1,8 +1,8 @@
 use crate::{
     address::{Address, PhysicalAddress, VirtualAddress},
+    address_map::{LOCAL_REGISTERS_BASE, LOCAL_REGISTERS_END, PERIPHERALS_BASE, PERIPHERALS_END},
     error::Error,
     kimage::{kernel_phy_range, kernel_stack_range},
-    mimo::{LOCAL_REGISTERS_BASE, LOCAL_REGISTERS_END, PERIPHERALS_BASE, PERIPHERALS_END},
 };
 
 // From https://lwn.net/Articles/718895/

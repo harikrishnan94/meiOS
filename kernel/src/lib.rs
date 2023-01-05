@@ -7,6 +7,7 @@
 extern crate lazy_static;
 
 pub mod address;
+pub mod address_map;
 pub mod boot;
 pub mod error;
 pub mod exception;

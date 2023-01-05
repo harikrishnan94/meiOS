@@ -5,10 +5,11 @@ use spin::Mutex;
 use tock_registers::interfaces::Writeable;
 
 use crate::{
+    address_map::CNTP_EL0,
     error::Result,
     exception::ExceptionContext,
     gic::{register_interrupt_handler, IRQHandler, IRQNum},
-    mimo::{CNTP_EL0, MIMORW},
+    mimo::MIMORW,
     println,
 };
 
