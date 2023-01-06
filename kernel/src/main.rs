@@ -8,11 +8,14 @@ use libmei::{
     boot::{switch_from_el1_to_el0, switch_from_el2_to_el1},
     exception,
     kimage::{kernel_image_size, kernel_stack_base},
+    mmu::setup_mmu,
     println, timer, uart,
 };
 use tock_registers::interfaces::Readable;
 
 fn mei_main() -> ! {
+    setup_mmu();
+
     println!("\nWelcome to meiOS..");
     println!("\tKernel Size: {}", kernel_image_size());
     println!("\tException Level: {}", CurrentEL.read(CurrentEL::EL));
