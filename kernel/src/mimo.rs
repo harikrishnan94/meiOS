@@ -1,7 +1,7 @@
 use crate::{
     address::{Address, PhysicalAddress, VirtualAddress},
     error::Result,
-    vm::phy_to_virt,
+    vm::phy2virt,
 };
 
 /// MIMO Register Read and Write
@@ -19,11 +19,11 @@ pub trait MIMORW {
 
 impl MIMORW for PhysicalAddress {
     unsafe fn write_reg<T: Sized + Copy>(self, val: T) -> Result<()> {
-        phy_to_virt(self)?.write_reg(val)
+        phy2virt(self)?.write_reg(val)
     }
 
     unsafe fn read_reg<T: Sized + Copy>(self) -> Result<T> {
-        phy_to_virt(self)?.read_reg()
+        phy2virt(self)?.read_reg()
     }
 }
 

@@ -1,7 +1,7 @@
 use crate::{
     address::{Address, PhysicalAddress, VirtualAddress},
     address_map::{LOCAL_REGISTERS_BASE, LOCAL_REGISTERS_END, PERIPHERALS_BASE, PERIPHERALS_END},
-    error::Error,
+    error::{Error, Result},
     kimage::{kernel_phy_range, kernel_stack_range},
 };
 
@@ -34,7 +34,7 @@ lazy_static! {
 }
 
 /// Works only for statically mapped physical addresses
-pub fn phy_to_virt(paddr: PhysicalAddress) -> Result<VirtualAddress, Error> {
+pub fn phy2virt(paddr: PhysicalAddress) -> Result<VirtualAddress> {
     let peripherals_range = PERIPHERALS_BASE..PERIPHERALS_END;
     let local_peripherals_range = LOCAL_REGISTERS_BASE..LOCAL_REGISTERS_END;
     let kernel_image_range = kernel_phy_range();

@@ -1,7 +1,9 @@
 use macros::AddressOps;
 use tock_registers::{interfaces::Readable, register_bitfields, registers::InMemoryRegister};
 
-use crate::error::Error;
+use crate::error::{Error, Result};
+
+pub const VIRTUAL_ADDRESS_LEVEL_IDX_BITS: usize = 9;
 
 /// Base trait common to both Physical and Virtual Addresses
 #[const_trait]
@@ -40,8 +42,16 @@ pub enum TTBR {
     One = 1,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum AddressTranslationLevel {
+    Zero = 0,
+    One = 1,
+    Two = 2,
+    Three = 3,
+}
+
 impl VirtualAddress {
-    pub fn new(val: usize) -> Result<Self, Error> {
+    pub fn new(val: usize) -> Result<Self> {
         let va = Self(val);
 
         if va.identify_ttbr_select().is_some() {
@@ -55,28 +65,34 @@ impl VirtualAddress {
         self.identify_ttbr_select().unwrap()
     }
 
-    pub fn get_level3_ind(&self) -> usize {
-        InMemoryRegister::<usize, VA::Register>::new(self.0).read(VA::Level_3)
+    pub fn get_idx_for_level(&self, level: &AddressTranslationLevel) -> usize {
+        let reg = InMemoryRegister::<usize, VA::Register>::new(self.0);
+
+        match level {
+            AddressTranslationLevel::Zero => reg.read(VA::Level_0),
+            AddressTranslationLevel::One => reg.read(VA::Level_1),
+            AddressTranslationLevel::Two => reg.read(VA::Level_2),
+            AddressTranslationLevel::Three => reg.read(VA::Level_3),
+        }
     }
 
-    pub fn get_level2_ind(&self) -> usize {
-        InMemoryRegister::<usize, VA::Register>::new(self.0).read(VA::Level_2)
+    #[allow(non_snake_case)]
+    pub fn get_page_offset_4KiB(&self) -> usize {
+        InMemoryRegister::<usize, VA::Register>::new(self.0).read(VA::PageOffset_4KiB)
     }
 
-    pub fn get_level1_ind(&self) -> usize {
-        InMemoryRegister::<usize, VA::Register>::new(self.0).read(VA::Level_1)
+    #[allow(non_snake_case)]
+    pub fn get_page_offset_2MiB(&self) -> usize {
+        InMemoryRegister::<usize, VA::Register>::new(self.0).read(VA::PageOffset_2MiB)
     }
 
-    pub fn get_level0_ind(&self) -> usize {
-        InMemoryRegister::<usize, VA::Register>::new(self.0).read(VA::Level_0)
-    }
-
-    pub fn get_page_offset(&self) -> usize {
-        InMemoryRegister::<usize, VA::Register>::new(self.0).read(VA::PageOffset)
+    #[allow(non_snake_case)]
+    pub fn get_page_offset_1GiB(&self) -> usize {
+        InMemoryRegister::<usize, VA::Register>::new(self.0).read(VA::PageOffset_1GiB)
     }
 
     fn identify_ttbr_select(&self) -> Option<TTBR> {
-        match InMemoryRegister::<usize, VA::Register>::new(self.0).read(VA::PageOffset) {
+        match InMemoryRegister::<usize, VA::Register>::new(self.0).read(VA::TTBR_Select) {
             0xFFFF => Some(TTBR::One),
             0x0000 => Some(TTBR::Zero),
             _ => None,
@@ -94,7 +110,12 @@ impl core::fmt::Display for VirtualAddress {
 register_bitfields![usize,
     VA [
         /// Offset within page
-        PageOffset OFFSET(0) NUMBITS(12) [],
+        // For 4 KiB Page
+        PageOffset_4KiB OFFSET(0) NUMBITS(12) [],
+        // For 2 MiB Page
+        PageOffset_2MiB OFFSET(0) NUMBITS(21) [],
+        // For 1 GiB Page
+        PageOffset_1GiB OFFSET(0) NUMBITS(30) [],
 
         /// Level 3 Index
         Level_3 OFFSET(12) NUMBITS(9) [],

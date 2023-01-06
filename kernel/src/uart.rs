@@ -9,7 +9,7 @@ use crate::{
     error::Result,
     exception::ExceptionContext,
     gic::{enable_irq, register_interrupt_handler, IRQHandler, IRQNum},
-    vm::phy_to_virt,
+    vm::phy2virt,
 };
 
 register_structs! {
@@ -47,7 +47,7 @@ impl Pl011Uart {
     fn default() -> Result<Self> {
         unsafe {
             Ok(Self(
-                (phy_to_virt(PL011_UART_BASE)?.as_mut_ptr::<Registers>())
+                (phy2virt(PL011_UART_BASE)?.as_mut_ptr::<Registers>())
                     .as_mut()
                     .unwrap(),
             ))
