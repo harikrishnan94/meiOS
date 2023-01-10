@@ -2,15 +2,36 @@
     "version": "2.0.0",
     "tasks": [
         {
+            "type": "process",
+            "label": "Master Build Task",
+            "isBuildCommand": true,
+            "command": "echo",
+            "dependsOn": [
+                "Build",
+                "Generate Clangd Config (Update compile_commands.json)"
+            ],
+            "dependsOrder": "sequence",
+            "problemMatcher": []
+        },
+        {
             "type": "cmake",
-            "label": "CMake: build",
+            "label": "Build",
             "command": "build",
             "targets": [
                 "all"
             ],
-            "group": "build",
             "problemMatcher": [],
-            "detail": "CMake template build task"
+            "detail": "CMake Full Build task"
+        },
+        {
+            "type": "process",
+            "label": "Generate Clangd Config (Update compile_commands.json)",
+            "command": "${workspaceFolder}/generate_clangd_config.py",
+            "args": [
+                "${env:ARM_GCC_TOOLCHAIN_PATH}/aarch64-none-elf-g++",
+                "${workspaceFolder}/out/compile_commands.json",
+                "${workspaceFolder}/compile_commands.json"
+            ]
         },
         {
             "type": "shell",
@@ -26,12 +47,12 @@
                 "-S"
             ],
             "dependsOn": [
-                "CMake: Build"
+                "Build"
             ],
             "isBackground": true,
             "runOptions": {
                 "instanceLimit": 1,
-                "reevaluateOnRerun": true,
+                "reevaluateOnRerun": true
             },
             "problemMatcher": [
                 {
@@ -46,7 +67,7 @@
                     "background": {
                         "activeOnStart": true,
                         "beginsPattern": ".",
-                        "endsPattern": ".",
+                        "endsPattern": "."
                     }
                 }
             ]
