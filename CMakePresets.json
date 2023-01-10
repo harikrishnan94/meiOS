@@ -15,8 +15,7 @@
             "installDir": "${sourceDir}/out/install/${presetName}",
             "toolchainFile": "${workspaceFolder}/cmake/aarch64-none-elf-toolchain.cmake",
             "cacheVariables": {
-                "CMAKE_EXPORT_COMPILE_COMMANDS": true,
-                "CMAKE_TOOLCHAIN_FILE": "${workspaceFolder}/cmake/aarch64-none-elf-toolchain.cmake"
+                "CMAKE_EXPORT_COMPILE_COMMANDS": true
             }
         },
         {

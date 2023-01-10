@@ -3,6 +3,7 @@
 !.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/extensions.json
+!.vscode/launch.json
 compile_commands.json
 .cache/
 .clangd

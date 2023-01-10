@@ -1,0 +1,16 @@
+{
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "custom",
+            "name": "Kernel",
+            "targetCreateCommands": [
+                "target create ${command:cmake.launchTargetPath}"
+            ],
+            "processCreateCommands": [
+                "gdb-remote localhost:1234"
+            ],
+            "preLaunchTask": "Run Mei Kernel",
+        },
+    ]
+}

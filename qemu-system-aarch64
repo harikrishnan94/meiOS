@@ -1,0 +1,3 @@
+echo $(date) " - Running meiOS..."
+qemu-system-aarch64 "$@"
+echo $(date) " - meiOS run complete..."

@@ -4,13 +4,12 @@ meiOS is a Unix like kernel for Raspberry pi 3/4 written in C/C++. This is a hob
 
 ## Goals
 
-- Run on Raspberry PI 3/4
-- ARM (32-bit) support
+- Run on Raspberry PI 3 (qemu)/4
 - ARM (64-bit) support
 - RTOS (optional)
 
 ## Building and Testing
 
-Requires aarch64-none-elf and arm-none-eabi SDK. Can be built using clang too (Default on Apple Silicon)
+Requires aarch64-none-elf GNU Toolchain.
 
 Requires QEMU for testing.

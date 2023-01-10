@@ -15,14 +15,12 @@
         {
             "type": "shell",
             "label": "Run Mei Kernel",
-            "command": "qemu-system-aarch64",
+            "command": "${workspaceFolder}/qemu-system-aarch64",
             "args": [
                 "-M",
                 "raspi3b",
                 "-kernel",
                 "${command:cmake.buildDirectory}/mei",
-                "-cpu",
-                "cortex-a53",
                 "-nographic",
                 "-s",
                 "-S"
@@ -35,11 +33,23 @@
                 "instanceLimit": 1,
                 "reevaluateOnRerun": true,
             },
-            "problemMatcher": {
-                "background": {
-                    "activeOnStart": true,
+            "problemMatcher": [
+                {
+                    "pattern": [
+                        {
+                            "regexp": ".",
+                            "file": 1,
+                            "location": 2,
+                            "message": 3
+                        }
+                    ],
+                    "background": {
+                        "activeOnStart": true,
+                        "beginsPattern": ".",
+                        "endsPattern": ".",
+                    }
                 }
-            }
+            ]
         }
     ]
 }
