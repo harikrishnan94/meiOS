@@ -9,7 +9,7 @@
 //!     - Supports splitting/merging adjacent mappings.
 //!     - This is loaded into TTBR0 and is used in Un-privileged (User) mode.
 
-use core::cell::RefCell;
+use core::{alloc::Layout, cell::RefCell, mem::size_of};
 
 use tock_registers::{
     interfaces::{ReadWriteable, Readable},
@@ -20,11 +20,8 @@ use crate::{
     address::{Address, AddressTranslationLevel, PhysicalAddress, VirtualAddress},
     bug,
     error::{Error, Result},
-    mmu::TRANSLATION_TABLE_DESC_ALIGN_BITS,
-    vm::{
-        physical_page_alloc::{AllocationLayout, Allocator},
-        AccessPermissions, MemoryKind, MemoryMap,
-    },
+    mmu::NEXT_LEVEL_TABLE_ADDR_SHIFT,
+    vm::{AccessPermissions, MemoryKind, MemoryMap, PhysicalPageAllocator},
 };
 
 use super::{
@@ -59,13 +56,28 @@ impl Default for DescriptorTable {
 }
 
 /// This stores the root of Translation Table
-/// Address of `root` is stored in TTBR0/1
+/// Address of `root` is stored in TTBR0/1.
+///
+/// ### Notes on alignment requirements on Virtual and Physical Address space:
+///
+/// Starting from level 1, Virtual Address and Physical address are aligned to same boundary
+/// (i.e):
+/// In level 1, with Level 1 Block descriptor, VA and PA both are aligned to 1 GiB boundary.
+/// In level 2, with Level 2 Block descriptor, VA and PA both are aligned to 2 MiB boundary.
+/// In level 3, with Page Descriptor, VA and PA both are aligned to 4 KiB boundary.
+///
+/// This means, Huge Pages must be aligned at both Virtual and Physical address spaces.
+/// Consequently, if either of the address'es are unaligned to the required huge page boundary (1GiB/2MiB),
+/// then huge pages of that size cannot be mapped. Must go with lower sized pages.
+///
+/// Though, an 1 GiB VA mapping consisting of 512 2MiB PA pages is only needed to be aligned at 2MiB boundary.
+/// Similarly, a 2 MiB VA mapping consisting of 512 4KiB PA pages is only needed to be aligned at 4KiB boundary.
 pub struct TranslationTable {
     root: DescriptorTable,
 }
 
 impl TranslationTable {
-    pub fn new<PhyAllocator: Allocator>(
+    pub fn new<PhyAllocator: PhysicalPageAllocator>(
         maps: &[MemoryMap],
         phy_page_alloc: &mut PhyAllocator,
     ) -> Result<Self> {
@@ -81,7 +93,7 @@ impl TranslationTable {
     }
 
     /// Add Mapping to translation table
-    pub fn add<PhyAllocator: Allocator>(
+    pub fn add<PhyAllocator: PhysicalPageAllocator>(
         &mut self,
         map: &MemoryMap,
         phy_page_alloc: &mut PhyAllocator,
@@ -105,7 +117,7 @@ impl TranslationTable {
         self.root.0.as_ptr() as u64
     }
 
-    fn add_impl<PhyAllocator: Allocator>(
+    fn add_impl<PhyAllocator: PhysicalPageAllocator>(
         &mut self,
         map: &ParsedMemoryMap,
         phy_page_alloc: &mut PhyAllocator,
@@ -121,7 +133,7 @@ impl TranslationTable {
 
         let visit_tbl_desc = |tbl_desc: &Stage1TableDescriptor| {
             let next_lvl_desc = tbl_desc.read(STAGE1_TABLE_DESCRIPTOR::NEXT_LEVEL_TABLE_ADDR)
-                << TRANSLATION_TABLE_DESC_ALIGN_BITS;
+                << NEXT_LEVEL_TABLE_ADDR_SHIFT;
 
             *descs.borrow_mut() = unsafe { &mut *(next_lvl_desc as *mut DescriptorTable) };
         };
@@ -203,7 +215,7 @@ impl TranslationTable {
             }
         }
 
-        unreachable!("Cannot Reach here after 4 levels");
+        Ok(())
     }
 }
 
@@ -312,13 +324,13 @@ impl Visitor for ROVisitor {
     }
 }
 
-struct InsertVisitor<'a, PhyAllocator: Allocator> {
+struct InsertVisitor<'a, PhyAllocator: PhysicalPageAllocator> {
     map: &'a ParsedMemoryMap,
     phy_page_alloc: &'a mut PhyAllocator,
     mmap: &'a MemoryMap,
 }
 
-impl<'a, PhyAllocator: Allocator> InsertVisitor<'a, PhyAllocator> {
+impl<'a, PhyAllocator: PhysicalPageAllocator> InsertVisitor<'a, PhyAllocator> {
     fn new(
         map: &'a ParsedMemoryMap,
         phy_page_alloc: &'a mut PhyAllocator,
@@ -332,7 +344,7 @@ impl<'a, PhyAllocator: Allocator> InsertVisitor<'a, PhyAllocator> {
     }
 }
 
-impl<'a, PhyAllocator: Allocator> Visitor for InsertVisitor<'a, PhyAllocator> {
+impl<'a, PhyAllocator: PhysicalPageAllocator> Visitor for InsertVisitor<'a, PhyAllocator> {
     fn visit_page_desc(&mut self, _: &Stage1PageDescriptor) -> Result<TraversalControl> {
         Err(Error::VMMapExists(*self.mmap))
     }
@@ -352,12 +364,10 @@ impl<'a, PhyAllocator: Allocator> Visitor for InsertVisitor<'a, PhyAllocator> {
     ) -> Result<TraversalControl> {
         let paddr = self.map.phy_addr.as_raw_ptr() as u64;
         let mut alloc_desc_table = || -> Result<u64> {
-            let layout = AllocationLayout::new(1, TRANSLATION_TABLE_DESC_ALIGN, true);
-            Ok(self
-                .phy_page_alloc
-                .allocate_phy_pages(&layout)?
-                .start_address()
-                .as_raw_ptr() as u64)
+            let layout =
+                Layout::from_size_align(size_of::<DescriptorTable>(), TRANSLATION_TABLE_DESC_ALIGN)
+                    .unwrap_or_else(|_| bug!("Descriptor Layout Mismatch"));
+            Ok(self.phy_page_alloc.alloc(layout)?.start.as_raw_ptr() as u64)
         };
 
         match level {
@@ -557,7 +567,10 @@ fn new_stage1_table_desc(next_level_addr: u64) -> u64 {
     let table_desc = Stage1TableDescriptor::new(0);
 
     table_desc.modify(STAGE1_TABLE_DESCRIPTOR::VALID::True + STAGE1_TABLE_DESCRIPTOR::TYPE::Table);
-    table_desc.modify(STAGE1_TABLE_DESCRIPTOR::NEXT_LEVEL_TABLE_ADDR.val(next_level_addr));
+    table_desc.modify(
+        STAGE1_TABLE_DESCRIPTOR::NEXT_LEVEL_TABLE_ADDR
+            .val(next_level_addr >> NEXT_LEVEL_TABLE_ADDR_SHIFT),
+    );
 
     table_desc.get()
 }
@@ -605,4 +618,155 @@ fn new_stage1_block_desc(level: BlockDescLevel, output_address: u64, attributes:
     }
 
     block_desc.get()
+}
+
+#[cfg(all(test, not(feature = "no_std")))]
+mod tests {
+    extern crate std;
+
+    use rand::{seq::SliceRandom, thread_rng, Rng};
+    use std::{
+        alloc::{self, Layout},
+        ops::Range,
+        vec::Vec,
+    };
+
+    use crate::address::VirtualAddress;
+    use crate::mmu::translation_table::TranslationTable;
+    use crate::mmu::GRANULE_SIZE;
+    use crate::vm::{AccessPermissions, MapDesc, MemoryKind};
+    use crate::{
+        address::{Address, PhysicalAddress},
+        error::Result,
+        mmu::translation_table::NUM_TABLE_DESC_ENTRIES,
+        vm::{MemoryMap, PhysicalPageAllocator},
+    };
+
+    struct PageAllocator {}
+
+    impl PhysicalPageAllocator for PageAllocator {
+        fn alloc(&mut self, layout: Layout) -> Result<Range<PhysicalAddress>> {
+            let ptr = unsafe { alloc::alloc(layout) };
+            if ptr.is_null() {
+                return Err(Error::PhysicalOOM);
+            }
+            let start = PhysicalAddress::new(ptr as usize);
+            let phy_start = PhysicalAddress::new(ptr as usize);
+
+            Ok(phy_start..phy_start + layout.size())
+        }
+
+        fn free(&mut self, phy_pages: &Range<PhysicalAddress>, layout: Layout) -> Result<()> {
+            unsafe { alloc::dealloc(phy_pages.start.as_mut_ptr::<u8>(), layout) };
+            Ok(())
+        }
+    }
+
+    #[warn(non_snake_case)]
+    fn get_a_random_512GiB_range() -> u32 {
+        thread_rng().gen_range(0..NUM_TABLE_DESC_ENTRIES) as u32
+    }
+
+    fn get_random_range(start: u32, end: u32) -> Vec<u32> {
+        let mut vec: Vec<u32> = (start..end).collect();
+        vec.shuffle(&mut thread_rng());
+        vec
+    }
+
+    fn get_random_virt_addr() -> VirtualAddress {
+        VirtualAddress::new(0).unwrap()
+        // VirtualAddress::new(
+        //     rand::thread_rng()
+        //         .gen_range(0..512 * 1024 * 1024 * 1024u64)
+        //         .next_multiple_of(GRANULE_SIZE),
+        // )
+    }
+
+    #[warn(non_snake_case)]
+    fn generate_memory_maps() -> Vec<MemoryMap> {
+        const ONE_GIB: usize = 1024 * 1024 * 1024;
+        const TWO_MIB: usize = 2 * 1024 * 1024;
+        const FOUR_KIB: usize = 4 * 1024;
+
+        let mut virt_addr = get_random_virt_addr();
+        let rand_1GiB_ranges = get_random_range(0, NUM_TABLE_DESC_ENTRIES as u32);
+        let rand_2MiB_ranges = get_random_range(0, NUM_TABLE_DESC_ENTRIES as u32);
+        let rand_4KiB_ranges = get_random_range(0, NUM_TABLE_DESC_ENTRIES as u32);
+        let access_perms = AccessPermissions::normal_memory_default();
+        let mut memory_maps = Vec::new();
+        let form_phy_addr = |OneGiB: u32, TwoMiB: u32, FourKiB| {
+            PhysicalAddress::new(
+                OneGiB as usize * ONE_GIB + TwoMiB as usize * TWO_MIB + FourKiB as usize * FOUR_KIB,
+            )
+        };
+
+        for (i, one_gib_ind) in rand_1GiB_ranges.iter().enumerate() {
+            if i == NUM_TABLE_DESC_ENTRIES - 1 {
+                for (i, two_mib_ind) in rand_2MiB_ranges.iter().enumerate() {
+                    if i == NUM_TABLE_DESC_ENTRIES - 1 {
+                        for four_kib_ind in &rand_4KiB_ranges {
+                            memory_maps.push(MemoryMap::Normal(MapDesc::new(
+                                form_phy_addr(*one_gib_ind, *two_mib_ind, *four_kib_ind),
+                                virt_addr,
+                                FOUR_KIB / GRANULE_SIZE,
+                                access_perms,
+                            )));
+
+                            virt_addr += FOUR_KIB;
+                        }
+                    } else {
+                        memory_maps.push(MemoryMap::Normal(MapDesc::new(
+                            form_phy_addr(*one_gib_ind, *two_mib_ind, 0),
+                            virt_addr,
+                            TWO_MIB / GRANULE_SIZE,
+                            access_perms,
+                        )));
+
+                        virt_addr += TWO_MIB;
+                    }
+                }
+            } else {
+                memory_maps.push(MemoryMap::Normal(MapDesc::new(
+                    form_phy_addr(*one_gib_ind, 0, 0),
+                    virt_addr,
+                    ONE_GIB / GRANULE_SIZE,
+                    access_perms,
+                )));
+            }
+
+            virt_addr += ONE_GIB;
+        }
+
+        memory_maps.shuffle(&mut thread_rng());
+        memory_maps
+    }
+
+    #[test]
+    fn it_works() {
+        let mut page_alloc = PageAllocator {};
+        let memory_maps = generate_memory_maps();
+        let translation_table = TranslationTable::new(&memory_maps, &mut page_alloc);
+
+        assert!(translation_table.is_ok());
+
+        let translation_table = translation_table.unwrap();
+
+        for map in &memory_maps {
+            match map {
+                MemoryMap::Normal(desc) => {
+                    let vaddr = desc.virtual_address();
+                    let translation = translation_table.virt2phy(vaddr);
+
+                    assert!(translation.is_some());
+
+                    let translation = translation.unwrap();
+
+                    assert_eq!(translation.phy_addr, desc.physical_address());
+                    assert_eq!(translation.access_perms, desc.access_permissions());
+                    assert_eq!(translation.memory_kind, MemoryKind::Normal);
+                }
+                MemoryMap::Device(_) => assert!(false, "Failure"),
+            }
+        }
+    }
 }

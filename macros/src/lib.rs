@@ -152,6 +152,30 @@ pub fn derive_address_ops(item: TokenStream) -> TokenStream {
                 (self.0 - other.0) as isize
             }
         }
+
+        impl core::ops::AddAssign<isize> for #name {
+            fn add_assign(&mut self, val: isize) {
+                self.0 = (self.0 as isize + val) as usize;
+            }
+        }
+
+        impl core::ops::SubAssign<isize> for #name {
+            fn sub_assign(&mut self, val: isize) {
+                self.0 = (self.0 as isize - val) as usize;
+            }
+        }
+
+        impl core::ops::AddAssign<usize> for #name {
+            fn add_assign(&mut self, val: usize) {
+                self.0 = self.0 + val;
+            }
+        }
+
+        impl core::ops::SubAssign<usize> for #name {
+            fn sub_assign(&mut self, val: usize) {
+                self.0 = self.0 - val;
+            }
+        }
     };
 
     gen.into()

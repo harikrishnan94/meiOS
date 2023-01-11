@@ -1,4 +1,8 @@
-use crate::address::{Address, PhysicalAddress, VirtualAddress};
+use crate::{
+    address::{Address, PhysicalAddress, VirtualAddress},
+    error::Result,
+};
+use core::{alloc::Layout, ops::Range};
 
 // From https://lwn.net/Articles/718895/
 //
@@ -35,61 +39,13 @@ pub fn phy2virt(paddr: PhysicalAddress) -> VirtualAddress {
     *EL1_VIRT_ADDRESS_BASE + paddr.as_raw_ptr()
 }
 
-pub mod physical_page_alloc {
-    use crate::{address::PhysicalAddress, error::Result};
+pub trait PhysicalPageAllocator {
+    fn alloc(&mut self, layout: Layout) -> Result<Range<PhysicalAddress>>;
 
-    pub struct AllocationLayout {
-        num_pages: usize,
-        align: usize,
-        is_contigious: bool,
-    }
-
-    impl AllocationLayout {
-        pub fn new(num_pages: usize, align: usize, is_contigious: bool) -> Self {
-            Self {
-                num_pages,
-                align,
-                is_contigious,
-            }
-        }
-
-        pub fn num_pages(&self) -> usize {
-            self.num_pages
-        }
-        pub fn align(&self) -> usize {
-            self.align
-        }
-        pub fn is_contigious(&self) -> bool {
-            self.is_contigious
-        }
-    }
-
-    pub struct PhysicalPages {
-        phy_page_start: PhysicalAddress,
-        num_allocated_pages: usize,
-    }
-
-    impl PhysicalPages {
-        pub fn start_address(&self) -> PhysicalAddress {
-            self.phy_page_start
-        }
-
-        pub fn allocated_page_count(&self) -> usize {
-            self.num_allocated_pages
-        }
-    }
-
-    pub trait Allocator {
-        fn allocate_phy_pages(&mut self, layout: &AllocationLayout) -> Result<PhysicalPages>;
-
-        fn free_phy_pages(
-            &mut self,
-            phy_page_start: PhysicalAddress,
-            num_pages: usize,
-        ) -> Result<()>;
-    }
+    fn free(&mut self, phy_pages: &Range<PhysicalAddress>, layout: Layout) -> Result<()>;
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum MemoryKind {
     /// DRAM memory: always cache-able.
     Normal,
@@ -121,6 +77,20 @@ pub struct MapDesc {
 }
 
 impl MapDesc {
+    pub fn new(
+        phy_addr: PhysicalAddress,
+        virt_addr: VirtualAddress,
+        num_pages: usize,
+        access_perms: AccessPermissions,
+    ) -> Self {
+        Self {
+            phy_addr,
+            virt_addr,
+            num_pages,
+            access_perms,
+        }
+    }
+
     pub fn physical_address(&self) -> PhysicalAddress {
         self.phy_addr
     }

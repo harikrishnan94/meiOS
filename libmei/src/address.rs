@@ -54,10 +54,9 @@ impl VirtualAddress {
     pub fn new(val: usize) -> Result<Self> {
         let va = Self(val);
 
-        if va.identify_ttbr_select().is_some() {
-            Ok(va)
-        } else {
-            Err(Error::InvalidVirtualAddress(val))
+        match va.identify_ttbr_select() {
+            Some(_) => Ok(va),
+            None => Err(Error::InvalidVirtualAddress(val)),
         }
     }
 
