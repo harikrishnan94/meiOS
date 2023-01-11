@@ -5,8 +5,7 @@ use tock_registers::interfaces::Readable;
 use crate::{
     address::PhysicalAddress,
     address_map::{CNTP_STATUS_EL0, PERIPHERAL_IC_BASE},
-    error::Result,
-    exception::ExceptionContext,
+    arch::exception::ExceptionContext,
     mimo::MIMORW,
 };
 
@@ -50,11 +49,10 @@ lazy_static! {
 /// # Safety
 ///
 /// Initialize BCM2537 Interrupt controller
-pub unsafe fn init_gic() -> Result<()> {
-    DISABLE_IRQS_1.write_reg(0xffffffffu32)?;
-    DISABLE_IRQS_2.write_reg(0xffffffffu32)?;
-    DISABLE_BASIC_IRQS.write_reg(0xffffffffu32)?;
-    Ok(())
+pub unsafe fn init_gic() {
+    DISABLE_IRQS_1.write_reg(0xffffffffu32);
+    DISABLE_IRQS_2.write_reg(0xffffffffu32);
+    DISABLE_BASIC_IRQS.write_reg(0xffffffffu32);
 }
 
 pub(crate) fn register_interrupt_handler(irq_hand: &'static dyn IRQHandler) {
@@ -62,15 +60,15 @@ pub(crate) fn register_interrupt_handler(irq_hand: &'static dyn IRQHandler) {
     REGISTERED_IRQ_HANDLERS.lock()[irq_num] = IRQHandlerEntry::new(irq_hand);
 }
 
-fn is_timer_irq() -> Result<bool> {
-    Ok(unsafe {
-        CNTP_STATUS_EL0.read_reg::<u64>()? & (1 << 1) != 0
+fn is_timer_irq() -> bool {
+    unsafe {
+        CNTP_STATUS_EL0.read_reg::<u64>() & (1 << 1) != 0
             && CNTP_CTL_EL0.is_set(CNTP_CTL_EL0::ISTATUS)
-    })
+    }
 }
 
-pub(crate) fn dispatch_peripheral_irq(ec: &mut ExceptionContext) -> Result<bool> {
-    let irq_pending = unsafe { IRQ_BASIC_PENDING.read_reg::<u32>()? };
+pub(crate) fn dispatch_peripheral_irq(ec: &mut ExceptionContext) -> bool {
+    let irq_pending = unsafe { IRQ_BASIC_PENDING.read_reg::<u32>() };
     let mut handled = false;
 
     for i in 0..31 {
@@ -82,7 +80,7 @@ pub(crate) fn dispatch_peripheral_irq(ec: &mut ExceptionContext) -> Result<bool>
         }
     }
 
-    if is_timer_irq()? {
+    if is_timer_irq() {
         REGISTERED_IRQ_HANDLERS.lock()[0]
             .0
             .as_ref()
@@ -90,16 +88,16 @@ pub(crate) fn dispatch_peripheral_irq(ec: &mut ExceptionContext) -> Result<bool>
             .handle(ec);
         handled = true
     }
-    Ok(handled)
+    handled
 }
 
-pub(crate) unsafe fn enable_irq(irq_num: IRQNum) -> Result<()> {
+pub(crate) unsafe fn enable_irq(irq_num: IRQNum) {
     if irq_num < 8 {
-        return ENABLE_BASIC_IRQS.write_reg(1u32 << irq_num);
+        ENABLE_BASIC_IRQS.write_reg(1u32 << irq_num);
     } else if irq_num < 32 {
-        return ENABLE_IRQS_1.write_reg(1u32 << irq_num);
+        ENABLE_IRQS_1.write_reg(1u32 << irq_num);
     } else {
         let irq_num = irq_num - 32;
-        return ENABLE_IRQS_2.write_reg(1u32 << irq_num);
+        ENABLE_IRQS_2.write_reg(1u32 << irq_num);
     }
 }

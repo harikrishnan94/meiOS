@@ -6,9 +6,8 @@ use tock_registers::interfaces::Writeable;
 
 use crate::{
     address_map::CNTP_EL0,
-    error::Result,
-    exception::ExceptionContext,
-    gic::{register_interrupt_handler, IRQHandler, IRQNum},
+    arch::exception::ExceptionContext,
+    arch::gic::{register_interrupt_handler, IRQHandler, IRQNum},
     mimo::MIMORW,
     println,
 };
@@ -74,13 +73,12 @@ lazy_static! {
 /// # Safety
 ///
 /// Init Timer module
-pub unsafe fn enable() -> Result<()> {
+pub unsafe fn enable() {
     set_timer_interval_count();
 
     // Enable timer and timer interrupt
     CNTP_CTL_EL0.write(CNTP_CTL_EL0::ENABLE::SET + CNTP_CTL_EL0::IMASK::CLEAR);
 
-    CNTP_EL0.write_reg(1u64 << 1)?;
+    CNTP_EL0.write_reg(1u64 << 1);
     register_interrupt_handler(&*IRQ_HANDLER);
-    Ok(())
 }

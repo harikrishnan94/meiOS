@@ -2,13 +2,36 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "rust: cargo build",
+            "label": "Workspace Build",
+            "dependsOn": [
+                "Build mei",
+                "Build libmei"
+            ],
+            "group": "build",
+        },
+        {
+            "label": "Build mei",
+            "detail": "rust: cargo build mei",
             "type": "cargo",
             "command": "build",
+            "options": {
+                "cwd": "${workspaceFolder}/mei"
+            },
             "problemMatcher": [
                 "$rustc"
             ],
-            "group": "build",
+        },
+        {
+            "label": "Build libmei",
+            "detail": "rust: cargo build libmei",
+            "type": "cargo",
+            "command": "build",
+            "options": {
+                "cwd": "${workspaceFolder}/libmei"
+            },
+            "problemMatcher": [
+                "$rustc"
+            ],
         },
         {
             "label": "Run Mei Kernel",
@@ -20,6 +43,9 @@
                 "-S",
                 "-s"
             ],
+            "options": {
+                "cwd": "${workspaceFolder}/mei"
+            },
             "isBackground": true,
             "runOptions": {
                 "instanceLimit": 1,
@@ -42,6 +68,9 @@
                 "-S",
                 "-s"
             ],
+            "options": {
+                "cwd": "${workspaceFolder}/libmei"
+            },
             "isBackground": true,
             "runOptions": {
                 "instanceLimit": 1,

@@ -6,7 +6,6 @@ authors = ["Harikrishnan <harikrishnan.prabakaran@gmail.com>"]
 
 [lib]
 proc-macro = true
-path = "lib.rs"
 
 [dependencies]
 proc-macro2 = "1.x"

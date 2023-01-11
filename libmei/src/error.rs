@@ -1,10 +1,10 @@
-use crate::{address::PhysicalAddress, vm::MemoryMap};
+use crate::vm::MemoryMap;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Error {
     BumpAllocatorOOM(usize),
     InvalidVirtualAddress(usize),
-    PhysicalAddressNotStaticallyMapped(PhysicalAddress),
+
     CorruptedTranslationTable(u64),
     VMMapExists(MemoryMap),
     VMMapNotExists(MemoryMap),
@@ -21,11 +21,6 @@ impl core::fmt::Display for Error {
             }
 
             Error::InvalidVirtualAddress(addr) => write!(f, "Invalid Virtual Address `{addr}`"),
-            Error::PhysicalAddressNotStaticallyMapped(paddr) => write!(
-                f,
-                "Physical Address(`{paddr}`) is not statically mapped.
-        Peripheral, Kernel image addresses are statically mapped, for example"
-            ),
 
             Error::CorruptedTranslationTable(tt_desc) => {
                 write!(f, "Translation Table Corrupted @ 0x{tt_desc:X}")

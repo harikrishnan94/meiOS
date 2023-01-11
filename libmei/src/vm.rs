@@ -1,10 +1,4 @@
-use crate::{
-    address::{Address, PhysicalAddress, VirtualAddress},
-    address_map::{LOCAL_REGISTERS_BASE, LOCAL_REGISTERS_END, PERIPHERALS_BASE, PERIPHERALS_END},
-    error::{Error, Result},
-    kimage::{kernel_phy_range, kernel_stack_range},
-};
-use bitflags::bitflags;
+use crate::address::{Address, PhysicalAddress, VirtualAddress};
 
 // From https://lwn.net/Articles/718895/
 //
@@ -37,22 +31,8 @@ lazy_static! {
 }
 
 /// Works only for statically mapped physical addresses
-/// Returns kernel virtual address space
-pub fn phy2virt(paddr: PhysicalAddress) -> Result<VirtualAddress> {
-    let peripherals_range = PERIPHERALS_BASE..PERIPHERALS_END;
-    let local_peripherals_range = LOCAL_REGISTERS_BASE..LOCAL_REGISTERS_END;
-    let kernel_image_range = kernel_phy_range();
-    let kernel_stack_range = kernel_stack_range();
-
-    if !peripherals_range.contains(&paddr)
-        && !local_peripherals_range.contains(&paddr)
-        && !kernel_image_range.contains(&paddr)
-        && !kernel_stack_range.contains(&paddr)
-    {
-        return Err(Error::PhysicalAddressNotStaticallyMapped(paddr));
-    }
-
-    Ok(*EL1_VIRT_ADDRESS_BASE + paddr.as_raw_ptr())
+pub fn phy2virt(paddr: PhysicalAddress) -> VirtualAddress {
+    *EL1_VIRT_ADDRESS_BASE + paddr.as_raw_ptr()
 }
 
 pub mod physical_page_alloc {

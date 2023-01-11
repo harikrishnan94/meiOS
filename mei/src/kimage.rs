@@ -1,6 +1,6 @@
 use core::cell::UnsafeCell;
 
-use crate::address::PhysicalAddress;
+use libmei::address::PhysicalAddress;
 
 #[allow(improper_ctypes)]
 extern "C" {
@@ -16,6 +16,7 @@ pub fn kernel_phy_range() -> core::ops::Range<PhysicalAddress> {
     PhysicalAddress::new(kstart)..PhysicalAddress::new(kend)
 }
 
+#[allow(dead_code)]
 pub fn kernel_stack_range() -> core::ops::Range<PhysicalAddress> {
     let stack_top = unsafe { __kernel_stack_start_marker.get() as usize };
     let stack_bottom = 0;
