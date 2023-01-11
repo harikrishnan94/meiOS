@@ -6,6 +6,20 @@
     "configurations": [
         {
             "type": "lldb",
+            "request": "launch",
+            "name": "Tests",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--manifest-path=${workspaceFolder}/libmei/Cargo.toml"
+                ],
+            },
+            "args": []
+        },
+        {
+            "type": "lldb",
             "request": "custom",
             "name": "Kernel",
             "targetCreateCommands": [
@@ -19,7 +33,7 @@
         {
             "type": "lldb",
             "request": "custom",
-            "name": "Tests",
+            "name": "Tests (Mei)",
             "targetCreateCommands": [
                 "target create ${input:cargotesttarget}"
             ],
@@ -35,8 +49,8 @@
             "type": "command",
             "command": "shellCommand.execute",
             "args": {
-                "command": "cargo run -- -DUMMY 2>&1 | grep -e '-DUMMY' | head -n 1 | awk '{print $(NF-1)}'",
-                "description": "Get Target Name"
+                "command": "cd mei; cargo run -- -DUMMY 2>&1 | grep -e '-DUMMY' | head -n 1 | awk '{print \"mei/\" $(NF-1)}'",
+                "description": "Get Run Target Name"
             }
         },
         {
@@ -44,8 +58,8 @@
             "type": "command",
             "command": "shellCommand.execute",
             "args": {
-                "command": "cargo test -v -- -DUMMY 2>&1 | grep -e '-DUMMY' | head -n 1 | awk '{print $(NF-1)}'",
-                "description": "Get Target Name"
+                "command": "cd mei; cargo test -v -- -DUMMY 2>&1 | grep -e '-DUMMY' | head -n 1 | awk '{print \"mei/\" $(NF-1)}'",
+                "description": "Get Test Target Name"
             }
         }
     ]

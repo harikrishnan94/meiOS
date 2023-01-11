@@ -1,10 +1,7 @@
-use crate::address::PhysicalAddress;
-
 #[derive(Debug, Clone, Copy)]
 pub enum Error {
     BumpAllocatorOOM(usize),
     InvalidVirtualAddress(usize),
-    PhysicalAddressNotStaticallyMapped(PhysicalAddress),
 }
 
 impl core::fmt::Display for Error {
@@ -14,13 +11,6 @@ impl core::fmt::Display for Error {
                 write!(f, "Static Bump Allocator OOM. Configured Size = {max_size}")
             }
             Error::InvalidVirtualAddress(addr) => write!(f, "Invalid Virtual Address `{addr}`"),
-            Error::PhysicalAddressNotStaticallyMapped(paddr) => {
-                write!(
-                    f,
-                    "Physical Address(`{paddr}`) is not statically mapped.
-            Peripheral, Kernel image addresses are statically mapped, for example"
-                )
-            }
         }
     }
 }

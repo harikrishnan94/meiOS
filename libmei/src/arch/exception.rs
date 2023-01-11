@@ -13,9 +13,10 @@ use tock_registers::{
     registers::InMemoryRegister,
 };
 
-use crate::{gic::dispatch_peripheral_irq, println};
+use super::gic::dispatch_peripheral_irq;
+use crate::println;
 
-global_asm!(include_str!("../asm/rpi3/exception.s"));
+global_asm!(include_str!("asm/rpi3/exception.s"));
 
 mod daifbits {
     pub const IRQ_ENABLE: u8 = 0b0010;
@@ -121,7 +122,7 @@ fn current_el_spn_sync(ec: &mut ExceptionContext) {
 
 #[exception_handler]
 fn current_el_spn_irq(ec: &mut ExceptionContext) {
-    if !dispatch_peripheral_irq(ec).unwrap() {
+    if !dispatch_peripheral_irq(ec) {
         default_handler("current_el_spn_irq", ec);
     }
 }
@@ -143,7 +144,7 @@ fn lower_el_aarch64_sync(ec: &mut ExceptionContext) {
 
 #[exception_handler]
 fn lower_el_aarch64_irq(ec: &mut ExceptionContext) {
-    if !dispatch_peripheral_irq(ec).unwrap() {
+    if !dispatch_peripheral_irq(ec) {
         default_handler("lower_el_aarch64_irq", ec);
     }
 }

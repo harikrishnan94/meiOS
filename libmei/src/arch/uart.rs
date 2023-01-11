@@ -6,9 +6,9 @@ use tock_registers::{register_bitfields, register_structs};
 use crate::{
     address::Address,
     address_map::PL011_UART_BASE,
+    arch::exception::ExceptionContext,
+    arch::gic::{enable_irq, register_interrupt_handler, IRQHandler, IRQNum},
     error::Result,
-    exception::ExceptionContext,
-    gic::{enable_irq, register_interrupt_handler, IRQHandler, IRQNum},
     vm::phy2virt,
 };
 
@@ -44,13 +44,13 @@ const UART_IRQ_NUM: IRQNum = 57;
 const UART_IRQ_PENDING_BIT_NUM: IRQNum = 19;
 
 impl Pl011Uart {
-    fn default() -> Result<Self> {
+    fn default() -> Self {
         unsafe {
-            Ok(Self(
-                (phy2virt(PL011_UART_BASE)?.as_mut_ptr::<Registers>())
+            Self(
+                (phy2virt(PL011_UART_BASE).as_mut_ptr::<Registers>())
                     .as_mut()
                     .unwrap(),
-            ))
+            )
         }
     }
 
@@ -96,7 +96,7 @@ struct UARTAccessor {
 
 impl UARTAccessor {
     fn default() -> Result<Self> {
-        let mut uart = Pl011Uart::default()?;
+        let mut uart = Pl011Uart::default();
         uart.init();
 
         Ok(Self {
@@ -132,9 +132,9 @@ impl IRQHandler for UARTAccessor {
 /// # Safety
 ///
 /// Initialize UART and Enable UART Interrupts
-pub unsafe fn irq_enable() -> Result<()> {
+pub unsafe fn irq_enable() {
     register_interrupt_handler(&*IRQ_HANDLER);
-    enable_irq(UART_IRQ_NUM)
+    enable_irq(UART_IRQ_NUM);
 }
 
 impl Write for Pl011Uart {
@@ -147,7 +147,7 @@ impl Write for Pl011Uart {
 /// Like the `print!` macro in the standard library, but prints to the UART0 instance.
 #[macro_export]
 macro_rules! print {
-    ($($arg:tt)*) => ($crate::uart::_print(format_args!($($arg)*)));
+    ($($arg:tt)*) => ($crate::arch::uart::_print(format_args!($($arg)*)));
 }
 
 /// Like the `println!` macro in the standard library, but prints to the UART0 instance.

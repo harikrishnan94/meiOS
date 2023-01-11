@@ -3,7 +3,7 @@ use core::arch::global_asm;
 use tock_registers::interfaces::Writeable;
 
 global_asm!(
-    include_str!("../asm/rpi3/boot.s"),
+    include_str!("asm/rpi3/boot.s"),
     CPUID_MASK = const ((1 << 2) - 1), /* MPIDR_EL1's last 2 bits contain the current cpu */
     BOOT_CORE_ID = const 0,
     EL_BITS_OFFSET = const 2, /* CurrentEL's 2:3 contains the exception level */

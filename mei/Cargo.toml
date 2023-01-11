@@ -3,27 +3,22 @@ name = "mei"
 version = "0.0.1"
 edition = "2021"
 authors = ["Harikrishnan <harikrishnan.prabakaran@gmail.com>"]
-
-[lib]
-name = "libmei"
-test = false
+build = "build.rs"
 
 # Disable unit tests for the kernel binary.
 [[bin]]
 name = "mei"
-path = "src/main.rs"
 test = false
 
 [dependencies]
-macros = { path = "../macros" }
+libmei = { path = "../libmei", features = ["no_std"] }
 tock-registers = "0.8.1"
-spin = "0.9.4"
-qemu-exit = "3.0.1"
 aarch64-cpu = "9.2.0"
-
-[dependencies.lazy_static]
-version = "1.0"
-features = ["spin_no_std"]
 
 [build-dependencies]
 cargo-binutils = "0.3.6"
+
+[profile.release]
+strip = true    # Automatically strip symbols from the binary.
+opt-level = "z" # Optimize for size.
+lto = true

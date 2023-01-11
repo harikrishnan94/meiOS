@@ -5,12 +5,16 @@
 
 use aarch64_cpu::{asm, registers::*};
 use libmei::{
-    boot::{switch_from_el1_to_el0, switch_from_el2_to_el1},
-    exception,
-    kimage::{kernel_image_size, kernel_stack_base},
-    println, timer, uart,
+    arch::boot::{switch_from_el1_to_el0, switch_from_el2_to_el1},
+    arch::exception,
+    arch::timer,
+    arch::uart,
+    println,
 };
 use tock_registers::interfaces::Readable;
+
+mod kimage;
+use kimage::{kernel_image_size, kernel_stack_base};
 
 fn mei_main() -> ! {
     println!("\nWelcome to meiOS..");
@@ -19,8 +23,8 @@ fn mei_main() -> ! {
     println!("\tKernel Stack Base: 0x{:X}", kernel_stack_base());
 
     unsafe {
-        uart::irq_enable().unwrap();
-        timer::enable().unwrap();
+        uart::irq_enable();
+        timer::enable();
         exception::handler_init();
         exception::enable_irq();
         drop_to_el0();
