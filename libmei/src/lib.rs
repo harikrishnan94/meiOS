@@ -5,7 +5,7 @@
 #![feature(allocator_api)]
 #![feature(strict_provenance)]
 #![feature(slice_ptr_get)]
-#![cfg_attr(test, feature(int_roundings))]
+#![cfg_attr(test, feature(nonnull_slice_from_raw_parts))]
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]
