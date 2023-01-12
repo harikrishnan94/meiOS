@@ -75,33 +75,34 @@ impl Default for DescriptorTable {
 ///
 /// Though, an 1 GiB VA mapping consisting of 512 2MiB PA pages is only needed to be aligned at 2MiB boundary.
 /// Similarly, a 2 MiB VA mapping consisting of 512 4KiB PA pages is only needed to be aligned at 4KiB boundary.
+#[derive(Default)]
 pub struct TranslationTable {
     root: DescriptorTable,
 }
 
 impl TranslationTable {
-    pub fn new<PhyAllocator: PhysicalPageAllocator>(
+    pub fn new<DescAlloc: PhysicalPageAllocator>(
         maps: &[MemoryMap],
-        phy_page_alloc: &PhyAllocator,
+        desc_alloc: &DescAlloc,
     ) -> Result<Self> {
         let mut tt = Self {
             root: DescriptorTable::default(),
         };
 
         for map in maps {
-            tt.add_impl(&parse_memory_map(map), phy_page_alloc, map)?;
+            tt.map_impl(&parse_memory_map(map), desc_alloc, map)?;
         }
 
         Ok(tt)
     }
 
     /// Add Mapping to translation table
-    pub fn add<PhyAllocator: PhysicalPageAllocator>(
+    pub fn map<DescAlloc: PhysicalPageAllocator>(
         &mut self,
         map: &MemoryMap,
-        phy_page_alloc: &PhyAllocator,
+        desc_alloc: &DescAlloc,
     ) -> Result<()> {
-        self.add_impl(&parse_memory_map(map), phy_page_alloc, map)
+        self.map_impl(&parse_memory_map(map), desc_alloc, map)
     }
 
     /// Walk the translation table using the VirtualAddress `vaddr` and produce corresponding PhysicalAddress
@@ -210,10 +211,10 @@ impl TranslationTable {
         self.root.0.as_ptr() as u64
     }
 
-    fn add_impl<PhyAllocator: PhysicalPageAllocator>(
+    fn map_impl<DescAlloc: PhysicalPageAllocator>(
         &mut self,
         map: &ParsedMemoryMap,
-        phy_page_alloc: &PhyAllocator,
+        desc_alloc: &DescAlloc,
         mmap: &MemoryMap,
     ) -> Result<()> {
         let map_scheme =
@@ -233,7 +234,7 @@ impl TranslationTable {
 
         map.num_pages = map_scheme.four_kib_aligned_span;
         while map.num_pages > 0 {
-            self.install_page_descs(&mut map, phy_page_alloc, mmap)
+            self.install_page_descs(&mut map, desc_alloc, mmap)
                 .map_err(|e| {
                     // #[cfg(test)]
                     // println!("{e:?}");
@@ -245,7 +246,7 @@ impl TranslationTable {
 
         map.num_pages = map_scheme.two_mib_aligned_span;
         while map.num_pages > 0 {
-            self.install_l2_block_desc(&mut map, phy_page_alloc, mmap)
+            self.install_l2_block_desc(&mut map, desc_alloc, mmap)
                 .map_err(|e| {
                     // #[cfg(test)]
                     // println!("{e:?}");
@@ -257,7 +258,7 @@ impl TranslationTable {
 
         map.num_pages = map_scheme.one_gib_aligned_span;
         while map.num_pages > 0 {
-            self.install_l1_block_desc(&mut map, phy_page_alloc, mmap)
+            self.install_l1_block_desc(&mut map, desc_alloc, mmap)
                 .map_err(|e| {
                     // #[cfg(test)]
                     // println!("{e:?}");
@@ -270,10 +271,10 @@ impl TranslationTable {
         Ok(())
     }
 
-    fn install_page_descs<PhyAllocator: PhysicalPageAllocator>(
+    fn install_page_descs<DescAlloc: PhysicalPageAllocator>(
         &mut self,
         map: &mut ParsedMemoryMap,
-        phy_page_alloc: &PhyAllocator,
+        desc_alloc: &DescAlloc,
         mmap: &MemoryMap,
     ) -> Result<()> {
         let mut descs = &mut self.root;
@@ -309,7 +310,7 @@ impl TranslationTable {
                         AddressTranslationLevel::Zero
                         | AddressTranslationLevel::One
                         | AddressTranslationLevel::Two => {
-                            let tbl_desc = install_new_tbl_desc(phy_page_alloc, &mut descs.0[idx])?;
+                            let tbl_desc = install_new_tbl_desc(desc_alloc, &mut descs.0[idx])?;
                             descend_tbl_desc(tbl_desc, &mut descs);
                         }
                         AddressTranslationLevel::Three => {
@@ -334,10 +335,10 @@ impl TranslationTable {
         Ok(())
     }
 
-    fn install_l2_block_desc<PhyAllocator: PhysicalPageAllocator>(
+    fn install_l2_block_desc<DescAlloc: PhysicalPageAllocator>(
         &mut self,
         map: &mut ParsedMemoryMap,
-        phy_page_alloc: &PhyAllocator,
+        desc_alloc: &DescAlloc,
         mmap: &MemoryMap,
     ) -> Result<()> {
         let mut descs = &mut self.root;
@@ -376,7 +377,7 @@ impl TranslationTable {
                     // Until we reach level 2, insert Table Descriptors.
                     match level {
                         AddressTranslationLevel::Zero | AddressTranslationLevel::One => {
-                            let tbl_desc = install_new_tbl_desc(phy_page_alloc, &mut descs.0[idx])?;
+                            let tbl_desc = install_new_tbl_desc(desc_alloc, &mut descs.0[idx])?;
                             descend_tbl_desc(tbl_desc, &mut descs);
                         }
                         AddressTranslationLevel::Two => {
@@ -408,10 +409,10 @@ impl TranslationTable {
         Ok(())
     }
 
-    fn install_l1_block_desc<PhyAllocator: PhysicalPageAllocator>(
+    fn install_l1_block_desc<DescAlloc: PhysicalPageAllocator>(
         &mut self,
         map: &mut ParsedMemoryMap,
-        phy_page_alloc: &PhyAllocator,
+        desc_alloc: &DescAlloc,
         mmap: &MemoryMap,
     ) -> Result<()> {
         let mut descs = &mut self.root;
@@ -456,7 +457,7 @@ impl TranslationTable {
                     // Until we reach level 1, insert Table Descriptors.
                     match level {
                         AddressTranslationLevel::Zero => {
-                            let tbl_desc = install_new_tbl_desc(phy_page_alloc, &mut descs.0[idx])?;
+                            let tbl_desc = install_new_tbl_desc(desc_alloc, &mut descs.0[idx])?;
                             descend_tbl_desc(tbl_desc, &mut descs);
                         }
                         AddressTranslationLevel::One => {
@@ -501,15 +502,15 @@ fn descend_tbl_desc(tbl_desc: Stage1TableDescriptor, descs: &mut &mut Descriptor
     *descs = unsafe { &mut *(next_lvl_desc as *mut DescriptorTable) };
 }
 
-fn install_new_tbl_desc<PhyAllocator: PhysicalPageAllocator>(
-    phy_page_alloc: &PhyAllocator,
+fn install_new_tbl_desc<DescAlloc: PhysicalPageAllocator>(
+    desc_alloc: &DescAlloc,
     new_desc: &mut u64,
 ) -> Result<Stage1TableDescriptor> {
     let alloc_desc_table = || -> Result<u64> {
         let layout =
             Layout::from_size_align(size_of::<DescriptorTable>(), TRANSLATION_TABLE_DESC_ALIGN)
                 .unwrap_or_else(|_| bug!("Descriptor Layout Mismatch"));
-        let ptr = phy_page_alloc
+        let ptr = desc_alloc
             .allocate_zeroed(layout)
             .map_err(|_| Error::PhysicalOOM)?
             .as_non_null_ptr()
