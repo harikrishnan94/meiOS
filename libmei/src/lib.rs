@@ -2,6 +2,10 @@
 #![feature(naked_functions)]
 #![feature(asm_const)]
 #![feature(const_trait_impl)]
+#![feature(allocator_api)]
+#![feature(strict_provenance)]
+#![feature(slice_ptr_get)]
+#![cfg_attr(test, feature(int_roundings))]
 #[macro_use]
 extern crate lazy_static;
 #[macro_use]

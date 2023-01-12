@@ -13,10 +13,17 @@
                     "test",
                     "--no-run",
                     "--lib",
-                    "--manifest-path=${workspaceFolder}/libmei/Cargo.toml"
+                    "--manifest-path=${workspaceFolder}/libmei/Cargo.toml",
+                    "--target=aarch64-apple-darwin"
                 ],
+                "env": {
+                    "RUSTFLAGS": "-Zsanitizer=address",
+                    "RUSTDOCFLAGS": "-Zsanitizer=address"
+                }
             },
-            "args": []
+            "args": [
+                "--nocapture"
+            ]
         },
         {
             "type": "lldb",

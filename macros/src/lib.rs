@@ -99,7 +99,7 @@ pub fn derive_address_ops(item: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(item as DeriveInput);
     let name = &ast.ident;
     let gen = quote! {
-        impl const Address for #name {
+        impl Address for #name {
             fn as_raw_ptr(&self) -> usize {
                 self.0
             }

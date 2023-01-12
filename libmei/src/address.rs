@@ -13,6 +13,15 @@ pub trait Address: Clone + Copy + Ord + core::fmt::Display {
     fn as_ptr<T: Sized>(&self) -> *const T;
 
     fn as_mut_ptr<T: Sized>(&self) -> *mut T;
+
+    fn align_offset(&self, align: usize) -> usize {
+        let ptr = self.as_raw_ptr();
+        ((ptr + (align - 1)) & !(align - 1)) - ptr
+    }
+
+    fn is_aligned(&self, align: usize) -> bool {
+        self.align_offset(align) == 0
+    }
 }
 
 /// Physical Address

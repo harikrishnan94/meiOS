@@ -1,8 +1,4 @@
-use crate::{
-    address::{Address, PhysicalAddress, VirtualAddress},
-    error::Result,
-};
-use core::{alloc::Layout, ops::Range};
+use crate::address::{Address, PhysicalAddress, VirtualAddress};
 
 // From https://lwn.net/Articles/718895/
 //
@@ -39,11 +35,7 @@ pub fn phy2virt(paddr: PhysicalAddress) -> VirtualAddress {
     *EL1_VIRT_ADDRESS_BASE + paddr.as_raw_ptr()
 }
 
-pub trait PhysicalPageAllocator {
-    fn alloc(&mut self, layout: Layout) -> Result<Range<PhysicalAddress>>;
-
-    fn free(&mut self, phy_pages: &Range<PhysicalAddress>, layout: Layout) -> Result<()>;
-}
+pub trait PhysicalPageAllocator: core::alloc::Allocator {}
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum MemoryKind {

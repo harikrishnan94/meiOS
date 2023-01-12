@@ -9,7 +9,7 @@
 //!     - Supports splitting/merging adjacent mappings.
 //!     - This is loaded into TTBR0 and is used in Un-privileged (User) mode.
 
-use core::{alloc::Layout, cell::RefCell, mem::size_of};
+use core::{alloc::Layout, cmp::min, mem::size_of};
 
 use tock_registers::{
     interfaces::{ReadWriteable, Readable},
@@ -25,7 +25,7 @@ use crate::{
 };
 
 use super::{
-    LEVEL_1_OUTPUT_ADDR_SHIFT, LEVEL_2_OUTPUT_ADDR_SHIFT, LEVEL_3_OUTPUT_ADDR_SHIFT,
+    GRANULE_SIZE, LEVEL_1_OUTPUT_ADDR_SHIFT, LEVEL_2_OUTPUT_ADDR_SHIFT, LEVEL_3_OUTPUT_ADDR_SHIFT,
     STAGE1_BLOCK_DESCRIPTOR, STAGE1_PAGE_DESCRIPTOR, STAGE1_TABLE_DESCRIPTOR,
     TRANSLATION_TABLE_DESC_ALIGN,
 };
@@ -38,6 +38,9 @@ const TRANSLATION_LEVELS: &[AddressTranslationLevel] = &[
     AddressTranslationLevel::Two,
     AddressTranslationLevel::Three,
 ];
+const ONE_GIB: usize = 1024 * 1024 * 1024;
+const TWO_MIB: usize = 2 * 1024 * 1024;
+const FOUR_KIB: usize = 4 * 1024;
 
 type Stage1PageDescriptor = InMemoryRegister<u64, STAGE1_PAGE_DESCRIPTOR::Register>;
 type Stage1TableDescriptor = InMemoryRegister<u64, STAGE1_TABLE_DESCRIPTOR::Register>;
@@ -79,7 +82,7 @@ pub struct TranslationTable {
 impl TranslationTable {
     pub fn new<PhyAllocator: PhysicalPageAllocator>(
         maps: &[MemoryMap],
-        phy_page_alloc: &mut PhyAllocator,
+        phy_page_alloc: &PhyAllocator,
     ) -> Result<Self> {
         let mut tt = Self {
             root: DescriptorTable::default(),
@@ -96,7 +99,7 @@ impl TranslationTable {
     pub fn add<PhyAllocator: PhysicalPageAllocator>(
         &mut self,
         map: &MemoryMap,
-        phy_page_alloc: &mut PhyAllocator,
+        phy_page_alloc: &PhyAllocator,
     ) -> Result<()> {
         self.add_impl(&parse_memory_map(map), phy_page_alloc, map)
     }
@@ -104,13 +107,103 @@ impl TranslationTable {
     /// Walk the translation table using the VirtualAddress `vaddr` and produce corresponding PhysicalAddress
     /// This is similar to what CPU does after a TLB Miss.
     pub fn virt2phy(&self, vaddr: VirtualAddress) -> Option<TranslationDesc> {
-        let mut visitor = ROVisitor::new(vaddr);
-        // Casting is OK, here as long as Visitor doesn't change the table.
-        unsafe { &mut *(self as *const Self as usize as *mut Self) }
-            .walk_generic(vaddr, &mut visitor)
-            .ok()?;
+        #[cfg(test)]
+        print!("Translating vaddr {vaddr}...");
+        let mut descs = &self.root;
 
-        visitor.res
+        for level in TRANSLATION_LEVELS {
+            let idx = vaddr.get_idx_for_level(level);
+            let desc = descs.0[idx];
+
+            #[cfg(test)]
+            print!(
+                "Visiting 0x{:X}[{idx}] at level {level:?}...",
+                descs.0.as_ptr() as u64
+            );
+
+            match parse_desc(desc, level).ok()? {
+                Descriptor::Table(tbl_desc) => {
+                    #[cfg(test)]
+                    print!("Found TBL Desc: 0x{:X}...", tbl_desc.get());
+                    assert_ne!(level, &AddressTranslationLevel::Three);
+                    let next_lvl_desc = read_next_level_desc(&tbl_desc);
+                    descs = unsafe { &*(next_lvl_desc as *mut DescriptorTable) };
+                }
+                Descriptor::Block(block_desc) => {
+                    let create_translation_desc = |phy_addr: usize| {
+                        let is_cacheable =
+                            !block_desc.matches_all(STAGE1_BLOCK_DESCRIPTOR::SH::OuterShareable);
+
+                        TranslationDesc {
+                            virt_addr: vaddr,
+                            phy_addr: PhysicalAddress::new(phy_addr),
+                            access_perms: parse_access_perms_bd(&block_desc),
+                            memory_kind: if is_cacheable {
+                                MemoryKind::Normal
+                            } else {
+                                MemoryKind::Device
+                            },
+                        }
+                    };
+
+                    let output_address;
+                    let page_offset;
+                    let phy_addr;
+
+                    match BlockDescLevel::from(level) {
+                        BlockDescLevel::One => {
+                            #[cfg(test)]
+                            print!("Found L1 Block Desc: 0x{:X}...", block_desc.get());
+                            output_address =
+                                block_desc.read(STAGE1_BLOCK_DESCRIPTOR::OUTPUT_ADDR_1GiB) as usize;
+                            page_offset = vaddr.get_page_offset_1GiB();
+                            phy_addr = (output_address << LEVEL_1_OUTPUT_ADDR_SHIFT) | page_offset;
+                        }
+                        BlockDescLevel::Two => {
+                            #[cfg(test)]
+                            print!("Found L2 Block Desc: 0x{:X}...", block_desc.get());
+                            output_address =
+                                block_desc.read(STAGE1_BLOCK_DESCRIPTOR::OUTPUT_ADDR_2MiB) as usize;
+                            page_offset = vaddr.get_page_offset_2MiB();
+                            phy_addr = (output_address << LEVEL_2_OUTPUT_ADDR_SHIFT) | page_offset;
+                        }
+                    }
+
+                    return Some(create_translation_desc(phy_addr));
+                }
+                Descriptor::Page(page_desc) => {
+                    #[cfg(test)]
+                    print!("Found Page Desc: 0x{:X}...", page_desc.get());
+
+                    let output_address =
+                        page_desc.read(STAGE1_PAGE_DESCRIPTOR::OUTPUT_ADDR_4KiB) as usize;
+                    let page_offset = vaddr.get_page_offset_4KiB();
+                    let phy_addr = (output_address << LEVEL_3_OUTPUT_ADDR_SHIFT) | page_offset;
+                    let is_cacheable =
+                        !page_desc.matches_all(STAGE1_PAGE_DESCRIPTOR::SH::OuterShareable);
+
+                    return Some(TranslationDesc {
+                        virt_addr: vaddr,
+                        phy_addr: PhysicalAddress::new(phy_addr),
+                        access_perms: parse_access_perms_pd(&page_desc),
+                        memory_kind: if is_cacheable {
+                            MemoryKind::Normal
+                        } else {
+                            MemoryKind::Device
+                        },
+                    });
+                }
+                Descriptor::Invalid => {
+                    #[cfg(test)]
+                    print!("Found Invalid Desc: 0x{desc:X}...");
+                    return None;
+                }
+            }
+            #[cfg(test)]
+            std::io::Write::flush(&mut std::io::stdout());
+        }
+
+        bug!("Cannot reach here");
     }
 
     pub fn get_base_address(&self) -> u64 {
@@ -120,273 +213,399 @@ impl TranslationTable {
     fn add_impl<PhyAllocator: PhysicalPageAllocator>(
         &mut self,
         map: &ParsedMemoryMap,
-        phy_page_alloc: &mut PhyAllocator,
+        phy_page_alloc: &PhyAllocator,
         mmap: &MemoryMap,
     ) -> Result<()> {
-        let mut visitor = InsertVisitor::new(map, phy_page_alloc, mmap);
-        self.walk_generic(map.virt_addr, &mut visitor)?;
+        let map_scheme =
+            determine_mapping_scheme(map.virt_addr, map.phy_addr, map.num_pages * GRANULE_SIZE);
+        let mut map = ParsedMemoryMap {
+            phy_addr: map.phy_addr,
+            virt_addr: map.virt_addr,
+            attributes: map.attributes,
+            num_pages: 0,
+        };
+
+        #[cfg(test)]
+        print!(
+            "Mapping paddr {} to vaddr {}...",
+            map.phy_addr, map.virt_addr
+        );
+
+        map.num_pages = map_scheme.four_kib_aligned_span;
+        while map.num_pages > 0 {
+            self.install_page_descs(&mut map, phy_page_alloc, mmap)
+                .map_err(|e| {
+                    #[cfg(test)]
+                    println!("{e:?}");
+                    e
+                })?;
+            #[cfg(test)]
+            println!("Done")
+        }
+
+        map.num_pages = map_scheme.two_mib_aligned_span;
+        while map.num_pages > 0 {
+            self.install_l2_block_desc(&mut map, phy_page_alloc, mmap)
+                .map_err(|e| {
+                    #[cfg(test)]
+                    println!("{e:?}");
+                    e
+                })?;
+            #[cfg(test)]
+            println!("Done")
+        }
+
+        map.num_pages = map_scheme.one_gib_aligned_span;
+        while map.num_pages > 0 {
+            self.install_l1_block_desc(&mut map, phy_page_alloc, mmap)
+                .map_err(|e| {
+                    #[cfg(test)]
+                    println!("{e:?}");
+                    e
+                })?;
+            #[cfg(test)]
+            println!("Done")
+        }
+
         Ok(())
     }
 
-    fn walk_generic<V: Visitor>(&mut self, vaddr: VirtualAddress, visitor: &mut V) -> Result<()> {
-        let descs = RefCell::new(&mut self.root);
-
-        let visit_tbl_desc = |tbl_desc: &Stage1TableDescriptor| {
-            let next_lvl_desc = tbl_desc.read(STAGE1_TABLE_DESCRIPTOR::NEXT_LEVEL_TABLE_ADDR)
-                << NEXT_LEVEL_TABLE_ADDR_SHIFT;
-
-            *descs.borrow_mut() = unsafe { &mut *(next_lvl_desc as *mut DescriptorTable) };
-        };
+    fn install_page_descs<PhyAllocator: PhysicalPageAllocator>(
+        &mut self,
+        map: &mut ParsedMemoryMap,
+        phy_page_alloc: &PhyAllocator,
+        mmap: &MemoryMap,
+    ) -> Result<()> {
+        let mut descs = &mut self.root;
 
         for level in TRANSLATION_LEVELS {
-            let idx = vaddr.get_idx_for_level(level);
-            let desc = descs.borrow().0[idx];
+            let idx = map.virt_addr.get_idx_for_level(level);
+            let desc = descs.0[idx];
+
+            #[cfg(test)]
+            print!(
+                "Visiting 0x{:X}[{idx}] at level {level:?}...",
+                descs.0.as_ptr() as u64
+            );
 
             match parse_desc(desc, level).map_err(|_| Error::CorruptedTranslationTable(desc))? {
                 Descriptor::Table(tbl_desc) => {
+                    #[cfg(test)]
+                    print!("Found TBL Desc: 0x{:X}...", tbl_desc.get());
                     assert_ne!(level, &AddressTranslationLevel::Three);
-                    visit_tbl_desc(&tbl_desc);
+                    descend_tbl_desc(tbl_desc, &mut descs);
                 }
-                Descriptor::Block(block_desc) => {
-                    assert!(
-                        level == &AddressTranslationLevel::One
-                            || level == &AddressTranslationLevel::Two
-                    );
-                    if level == &AddressTranslationLevel::One {
-                        match visitor.visit_block_desc_lvl1(&block_desc)? {
-                            TraversalControl::Break => break,
-                            TraversalControl::Continue => continue,
-                            TraversalControl::UpdateAndContinue(tbl_desc) => {
-                                descs.borrow_mut().0[idx] = tbl_desc.get();
-                                visit_tbl_desc(&tbl_desc);
-                                continue;
-                            }
-                            TraversalControl::UpdateAndBreak(newval) => {
-                                descs.borrow_mut().0[idx] = newval;
-                                break;
-                            }
+                Descriptor::Block(_) | Descriptor::Page(_) => {
+                    #[cfg(test)]
+                    print!("Found Block Or Page Desc: 0x{desc:X}...");
+                    return Err(Error::VMMapExists(*mmap));
+                }
+                Descriptor::Invalid => {
+                    #[cfg(test)]
+                    print!("Found Invalid Desc: 0x{desc:X}...");
+                    match level {
+                        // We need to insert only Page Descriptor.
+                        // Until we reach level 3, insert Table Descriptors.
+                        AddressTranslationLevel::Zero
+                        | AddressTranslationLevel::One
+                        | AddressTranslationLevel::Two => {
+                            let tbl_desc = install_new_tbl_desc(phy_page_alloc, &mut descs.0[idx])?;
+                            descend_tbl_desc(tbl_desc, &mut descs);
                         }
-                    } else {
-                        match visitor.visit_block_desc_lvl2(&block_desc)? {
-                            TraversalControl::Break => break,
-                            TraversalControl::Continue => continue,
-                            TraversalControl::UpdateAndContinue(tbl_desc) => {
-                                descs.borrow_mut().0[idx] = tbl_desc.get();
-                                visit_tbl_desc(&tbl_desc);
-                                continue;
-                            }
-                            TraversalControl::UpdateAndBreak(newval) => {
-                                descs.borrow_mut().0[idx] = newval;
-                                break;
-                            }
+                        AddressTranslationLevel::Three => {
+                            install_contigious_mappings(
+                                map,
+                                idx,
+                                descs,
+                                FOUR_KIB,
+                                &|output_address, attributes| {
+                                    new_stage1_page_desc(output_address, attributes)
+                                },
+                            );
+                            break;
                         }
                     }
                 }
-                Descriptor::Page(page_desc) => {
-                    assert_eq!(level, &AddressTranslationLevel::Three);
-                    match visitor.visit_page_desc(&page_desc)? {
-                        TraversalControl::Break | TraversalControl::Continue => break,
-                        TraversalControl::UpdateAndContinue(_) => {}
-                        TraversalControl::UpdateAndBreak(new_desc) => match to_raw_desc(new_desc) {
-                            RawDescriptor::TableOrPage(new_desc) => {
-                                descs.borrow_mut().0[idx] = new_desc;
-                                break;
-                            }
-                            RawDescriptor::Block(_) => {}
-                            RawDescriptor::Invalid => {
-                                descs.borrow_mut().0[idx] = new_desc;
-                                break;
-                            }
-                        },
-                    }
-                }
-                Descriptor::Invalid => match visitor.visit_invalid(desc, level)? {
-                    TraversalControl::Break | TraversalControl::Continue => break,
-                    TraversalControl::UpdateAndContinue(tbl_desc) => {
-                        descs.borrow_mut().0[idx] = tbl_desc.get();
-                        visit_tbl_desc(&tbl_desc);
-                        continue;
-                    }
-                    TraversalControl::UpdateAndBreak(newval) => {
-                        descs.borrow_mut().0[idx] = newval;
-                        break;
-                    }
-                },
             }
+            #[cfg(test)]
+            std::io::Write::flush(&mut std::io::stdout());
+        }
+
+        Ok(())
+    }
+
+    fn install_l2_block_desc<PhyAllocator: PhysicalPageAllocator>(
+        &mut self,
+        map: &mut ParsedMemoryMap,
+        phy_page_alloc: &PhyAllocator,
+        mmap: &MemoryMap,
+    ) -> Result<()> {
+        let mut descs = &mut self.root;
+
+        for level in TRANSLATION_LEVELS {
+            let idx = map.virt_addr.get_idx_for_level(level);
+            let desc = descs.0[idx];
+
+            #[cfg(test)]
+            print!(
+                "Visiting 0x{:X}[{idx}] at level {level:?}...",
+                descs.0.as_ptr() as u64
+            );
+
+            match parse_desc(desc, level).map_err(|_| Error::CorruptedTranslationTable(desc))? {
+                Descriptor::Table(tbl_desc) => {
+                    #[cfg(test)]
+                    print!("Found TBL Desc: 0x{:X}...", tbl_desc.get());
+                    assert_ne!(level, &AddressTranslationLevel::Three);
+                    descend_tbl_desc(tbl_desc, &mut descs);
+                }
+                Descriptor::Block(_) => {
+                    #[cfg(test)]
+                    print!("Found Block Desc: 0x{desc:X}...");
+                    return Err(Error::VMMapExists(*mmap));
+                }
+                Descriptor::Page(_) => {
+                    #[cfg(test)]
+                    print!("Found Page Desc: 0x{desc:X}...");
+                    return Err(Error::CorruptedTranslationTable(desc));
+                }
+                Descriptor::Invalid => {
+                    #[cfg(test)]
+                    print!("Found Invalid Desc: 0x{desc:X}...");
+                    // We need to insert only Level 2 Block Descriptor.
+                    // Until we reach level 2, insert Table Descriptors.
+                    match level {
+                        AddressTranslationLevel::Zero | AddressTranslationLevel::One => {
+                            let tbl_desc = install_new_tbl_desc(phy_page_alloc, &mut descs.0[idx])?;
+                            descend_tbl_desc(tbl_desc, &mut descs);
+                        }
+                        AddressTranslationLevel::Two => {
+                            install_contigious_mappings(
+                                map,
+                                idx,
+                                descs,
+                                TWO_MIB,
+                                &|output_address, attributes| {
+                                    new_stage1_block_desc(
+                                        BlockDescLevel::Two,
+                                        output_address,
+                                        attributes,
+                                    )
+                                },
+                            );
+                            break;
+                        }
+                        AddressTranslationLevel::Three => {
+                            return Err(Error::CorruptedTranslationTable(desc))
+                        }
+                    }
+                }
+            }
+            #[cfg(test)]
+            std::io::Write::flush(&mut std::io::stdout());
+        }
+
+        Ok(())
+    }
+
+    fn install_l1_block_desc<PhyAllocator: PhysicalPageAllocator>(
+        &mut self,
+        map: &mut ParsedMemoryMap,
+        phy_page_alloc: &PhyAllocator,
+        mmap: &MemoryMap,
+    ) -> Result<()> {
+        let mut descs = &mut self.root;
+
+        for level in TRANSLATION_LEVELS {
+            let idx = map.virt_addr.get_idx_for_level(level);
+            let desc = descs.0[idx];
+
+            #[cfg(test)]
+            print!(
+                "Visiting 0x{:X}[{idx}] at level {level:?}...",
+                descs.0.as_ptr() as u64
+            );
+
+            match parse_desc(desc, level).map_err(|_| Error::CorruptedTranslationTable(desc))? {
+                Descriptor::Table(tbl_desc) => {
+                    #[cfg(test)]
+                    print!("Found TBL Desc: 0x{:X}...", tbl_desc.get());
+                    assert_ne!(level, &AddressTranslationLevel::Three);
+                    descend_tbl_desc(tbl_desc, &mut descs);
+                }
+                Descriptor::Block(_) => {
+                    if *level == AddressTranslationLevel::One {
+                        #[cfg(test)]
+                        print!("Found L1 Block Desc: 0x{desc:X}...");
+                        return Err(Error::VMMapExists(*mmap));
+                    } else {
+                        #[cfg(test)]
+                        print!("Found L2 Block Desc: 0x{desc:X}...");
+                        return Err(Error::CorruptedTranslationTable(desc));
+                    }
+                }
+                Descriptor::Page(_) => {
+                    #[cfg(test)]
+                    print!("Found Page Desc: 0x{desc:X}...");
+                    return Err(Error::CorruptedTranslationTable(desc));
+                }
+                Descriptor::Invalid => {
+                    #[cfg(test)]
+                    print!("Found Invalid Desc: 0x{desc:X}...");
+                    // We need to insert only Level 1 Block Descriptor.
+                    // Until we reach level 1, insert Table Descriptors.
+                    match level {
+                        AddressTranslationLevel::Zero => {
+                            let tbl_desc = install_new_tbl_desc(phy_page_alloc, &mut descs.0[idx])?;
+                            descend_tbl_desc(tbl_desc, &mut descs);
+                        }
+                        AddressTranslationLevel::One => {
+                            install_contigious_mappings(
+                                map,
+                                idx,
+                                descs,
+                                ONE_GIB,
+                                &|output_address, attributes| {
+                                    new_stage1_block_desc(
+                                        BlockDescLevel::One,
+                                        output_address,
+                                        attributes,
+                                    )
+                                },
+                            );
+                            break;
+                        }
+                        AddressTranslationLevel::Two | AddressTranslationLevel::Three => {
+                            return Err(Error::CorruptedTranslationTable(desc))
+                        }
+                    }
+                }
+            }
+            #[cfg(test)]
+            std::io::Write::flush(&mut std::io::stdout());
         }
 
         Ok(())
     }
 }
 
-trait Visitor {
-    fn visit_page_desc(&mut self, desc: &Stage1PageDescriptor) -> Result<TraversalControl>;
-
-    fn visit_block_desc_lvl1(&mut self, desc: &Stage1BlockDescriptor) -> Result<TraversalControl>;
-
-    fn visit_block_desc_lvl2(&mut self, desc: &Stage1BlockDescriptor) -> Result<TraversalControl>;
-
-    fn visit_invalid(
-        &mut self,
-        desc_val: u64,
-        level: &AddressTranslationLevel,
-    ) -> Result<TraversalControl>;
+fn read_next_level_desc(tbl_desc: &Stage1TableDescriptor) -> u64 {
+    tbl_desc.read(STAGE1_TABLE_DESCRIPTOR::NEXT_LEVEL_TABLE_ADDR) << NEXT_LEVEL_TABLE_ADDR_SHIFT
 }
 
-enum TraversalControl {
-    Break,
-    Continue,
-    UpdateAndContinue(Stage1TableDescriptor),
-    UpdateAndBreak(u64),
+fn descend_tbl_desc(tbl_desc: Stage1TableDescriptor, descs: &mut &mut DescriptorTable) {
+    let next_lvl_desc = read_next_level_desc(&tbl_desc);
+    assert_ne!(next_lvl_desc, 0);
+    #[cfg(test)]
+    print!("descending to 0x{next_lvl_desc:X}...");
+    *descs = unsafe { &mut *(next_lvl_desc as *mut DescriptorTable) };
 }
 
-struct ROVisitor {
+fn install_new_tbl_desc<PhyAllocator: PhysicalPageAllocator>(
+    phy_page_alloc: &PhyAllocator,
+    new_desc: &mut u64,
+) -> Result<Stage1TableDescriptor> {
+    let alloc_desc_table = || -> Result<u64> {
+        let layout =
+            Layout::from_size_align(size_of::<DescriptorTable>(), TRANSLATION_TABLE_DESC_ALIGN)
+                .unwrap_or_else(|_| bug!("Descriptor Layout Mismatch"));
+        let ptr = phy_page_alloc
+            .allocate_zeroed(layout)
+            .map_err(|_| Error::PhysicalOOM)?
+            .as_non_null_ptr()
+            .addr()
+            .get();
+        Ok(ptr as u64)
+    };
+    let next_level_table = alloc_desc_table()?;
+    #[cfg(test)]
+    print!("allocating TBL Desc 0x{next_level_table:X}...");
+    let tbl_desc = Stage1TableDescriptor::new(new_stage1_table_desc(next_level_table));
+    *new_desc = tbl_desc.get();
+    Ok(tbl_desc)
+}
+
+fn install_contigious_mappings<F: Fn(u64, u64) -> u64>(
+    map: &mut ParsedMemoryMap,
+    idx: usize,
+    descs: &mut DescriptorTable,
+    page_size: usize,
+    new_stage1_descriptor: &F,
+) {
+    let mut paddr = map.phy_addr.as_raw_ptr() as u64;
+    let num_mapped_pages = core::cmp::min(map.num_pages, NUM_TABLE_DESC_ENTRIES - idx);
+    for i in 0..num_mapped_pages {
+        assert_eq!(descs.0[idx + i], INVALID_DESCRIPTOR);
+        let desc = new_stage1_descriptor(paddr, map.attributes);
+        descs.0[idx + i] = desc;
+        paddr += page_size as u64;
+    }
+    map.phy_addr += num_mapped_pages * page_size;
+    map.virt_addr += num_mapped_pages * page_size;
+    map.num_pages -= num_mapped_pages;
+
+    #[cfg(test)]
+    print!("Installing {num_mapped_pages} mappings of size: {page_size}...",);
+}
+
+#[derive(Default, Clone, Copy)]
+struct MappingScheme {
+    /// Number of Pages in 4KiB boundary
+    four_kib_aligned_span: usize,
+    /// Number of Pages in 2MiB boundary
+    two_mib_aligned_span: usize,
+    /// Number of Pages in 1GiB boundary
+    one_gib_aligned_span: usize,
+}
+
+const ALIGNMENTS: [usize; 3] = [ONE_GIB, TWO_MIB, FOUR_KIB];
+
+fn determine_mapping_scheme_impl(
     vaddr: VirtualAddress,
-    res: Option<TranslationDesc>,
-}
+    paddr: PhysicalAddress,
+    mut size: usize,
+    start_ind: usize,
+) -> MappingScheme {
+    assert!(start_ind < ALIGNMENTS.len());
 
-impl ROVisitor {
-    fn new(vaddr: VirtualAddress) -> Self {
-        Self { vaddr, res: None }
-    }
+    let mut mapping_scheme = MappingScheme::default();
 
-    fn block_desc_complete_visit(
-        &mut self,
-        block_desc: &Stage1BlockDescriptor,
-        phy_addr: usize,
-    ) -> TraversalControl {
-        let is_cacheable = !block_desc.matches_all(STAGE1_BLOCK_DESCRIPTOR::SH::OuterShareable);
+    for (i, align) in ALIGNMENTS[start_ind..].iter().enumerate() {
+        let offset = paddr.align_offset(*align);
 
-        self.res = Some(TranslationDesc {
-            virt_addr: self.vaddr,
-            phy_addr: PhysicalAddress::new(phy_addr),
-            access_perms: parse_access_perms_bd(block_desc),
-            memory_kind: if is_cacheable {
-                MemoryKind::Normal
-            } else {
-                MemoryKind::Device
-            },
-        });
+        if vaddr.align_offset(*align) == offset {
+            if offset != 0 {
+                let peeled_size = min(offset, size);
+                // Recursive call will only set the lower alignment boundary page counts.
+                mapping_scheme =
+                    determine_mapping_scheme_impl(vaddr, paddr, peeled_size, start_ind + i + 1);
+                size -= peeled_size;
+            }
 
-        TraversalControl::Break
-    }
-}
-
-impl Visitor for ROVisitor {
-    fn visit_page_desc(&mut self, page_desc: &Stage1PageDescriptor) -> Result<TraversalControl> {
-        let output_address = page_desc.read(STAGE1_PAGE_DESCRIPTOR::OUTPUT_ADDR_4KiB) as usize;
-        let page_offset = self.vaddr.get_page_offset_4KiB();
-        let phy_addr = (output_address << LEVEL_3_OUTPUT_ADDR_SHIFT) | page_offset;
-        let is_cacheable = !page_desc.matches_all(STAGE1_PAGE_DESCRIPTOR::SH::OuterShareable);
-
-        self.res = Some(TranslationDesc {
-            virt_addr: self.vaddr,
-            phy_addr: PhysicalAddress::new(phy_addr),
-            access_perms: parse_access_perms_pd(page_desc),
-            memory_kind: if is_cacheable {
-                MemoryKind::Normal
-            } else {
-                MemoryKind::Device
-            },
-        });
-
-        Ok(TraversalControl::Break)
-    }
-
-    fn visit_block_desc_lvl1(
-        &mut self,
-        block_desc: &Stage1BlockDescriptor,
-    ) -> Result<TraversalControl> {
-        let output_address = block_desc.read(STAGE1_BLOCK_DESCRIPTOR::OUTPUT_ADDR_1GiB) as usize;
-        let page_offset = self.vaddr.get_page_offset_1GiB();
-        let phy_addr = (output_address << LEVEL_1_OUTPUT_ADDR_SHIFT) | page_offset;
-
-        Ok(self.block_desc_complete_visit(block_desc, phy_addr))
-    }
-
-    fn visit_block_desc_lvl2(
-        &mut self,
-        block_desc: &Stage1BlockDescriptor,
-    ) -> Result<TraversalControl> {
-        let output_address = block_desc.read(STAGE1_BLOCK_DESCRIPTOR::OUTPUT_ADDR_2MiB) as usize;
-        let page_offset = self.vaddr.get_page_offset_2MiB();
-        let phy_addr = (output_address << LEVEL_2_OUTPUT_ADDR_SHIFT) | page_offset;
-
-        Ok(self.block_desc_complete_visit(block_desc, phy_addr))
-    }
-
-    fn visit_invalid(
-        &mut self,
-        _desc_val: u64,
-        _level: &AddressTranslationLevel,
-    ) -> Result<TraversalControl> {
-        Ok(TraversalControl::Break)
-    }
-}
-
-struct InsertVisitor<'a, PhyAllocator: PhysicalPageAllocator> {
-    map: &'a ParsedMemoryMap,
-    phy_page_alloc: &'a mut PhyAllocator,
-    mmap: &'a MemoryMap,
-}
-
-impl<'a, PhyAllocator: PhysicalPageAllocator> InsertVisitor<'a, PhyAllocator> {
-    fn new(
-        map: &'a ParsedMemoryMap,
-        phy_page_alloc: &'a mut PhyAllocator,
-        mmap: &'a MemoryMap,
-    ) -> Self {
-        Self {
-            map,
-            phy_page_alloc,
-            mmap,
+            // This will only set the current alignment boundary page count.
+            let page_count = size / align;
+            match *align {
+                ONE_GIB => mapping_scheme.one_gib_aligned_span = page_count,
+                TWO_MIB => mapping_scheme.two_mib_aligned_span = page_count,
+                FOUR_KIB => mapping_scheme.four_kib_aligned_span = page_count,
+                _ => bug!("invalid alignment"),
+            };
+            break;
         }
     }
+
+    mapping_scheme
 }
 
-impl<'a, PhyAllocator: PhysicalPageAllocator> Visitor for InsertVisitor<'a, PhyAllocator> {
-    fn visit_page_desc(&mut self, _: &Stage1PageDescriptor) -> Result<TraversalControl> {
-        Err(Error::VMMapExists(*self.mmap))
-    }
+fn determine_mapping_scheme(
+    vaddr: VirtualAddress,
+    paddr: PhysicalAddress,
+    size: usize,
+) -> MappingScheme {
+    assert!(vaddr.is_aligned(GRANULE_SIZE));
+    assert!(paddr.is_aligned(GRANULE_SIZE));
 
-    fn visit_block_desc_lvl1(&mut self, _: &Stage1BlockDescriptor) -> Result<TraversalControl> {
-        Err(Error::VMMapExists(*self.mmap))
-    }
-
-    fn visit_block_desc_lvl2(&mut self, _: &Stage1BlockDescriptor) -> Result<TraversalControl> {
-        Err(Error::VMMapExists(*self.mmap))
-    }
-
-    fn visit_invalid(
-        &mut self,
-        _desc_val: u64,
-        level: &AddressTranslationLevel,
-    ) -> Result<TraversalControl> {
-        let paddr = self.map.phy_addr.as_raw_ptr() as u64;
-        let mut alloc_desc_table = || -> Result<u64> {
-            let layout =
-                Layout::from_size_align(size_of::<DescriptorTable>(), TRANSLATION_TABLE_DESC_ALIGN)
-                    .unwrap_or_else(|_| bug!("Descriptor Layout Mismatch"));
-            Ok(self.phy_page_alloc.alloc(layout)?.start.as_raw_ptr() as u64)
-        };
-
-        match level {
-            AddressTranslationLevel::Zero => {
-                let next_level_table = alloc_desc_table()?;
-                let tbl_desc = Stage1TableDescriptor::new(new_stage1_table_desc(next_level_table));
-                Ok(TraversalControl::UpdateAndContinue(tbl_desc))
-            }
-            AddressTranslationLevel::One | AddressTranslationLevel::Two => {
-                let desc =
-                    new_stage1_block_desc(BlockDescLevel::from(level), paddr, self.map.attributes);
-                Ok(TraversalControl::UpdateAndBreak(desc))
-            }
-            AddressTranslationLevel::Three => {
-                let desc = new_stage1_page_desc(paddr, self.map.attributes);
-                Ok(TraversalControl::UpdateAndBreak(desc))
-            }
-        }
-    }
+    determine_mapping_scheme_impl(vaddr, paddr, size, 0)
 }
 
 pub struct TranslationDesc {
@@ -441,6 +660,13 @@ fn parse_map_attrs(ap: &AccessPermissions, device: MemoryKind) -> u64 {
         } else {
             page_desc.modify(STAGE1_PAGE_DESCRIPTOR::AP::RO_EL1)
         }
+    }
+
+    if ap.contains(AccessPermissions::EL1_WRITE) || !ap.contains(AccessPermissions::EL1_EXECUTE) {
+        page_desc.modify(STAGE1_PAGE_DESCRIPTOR::PXN::SET);
+    }
+    if ap.contains(AccessPermissions::EL0_WRITE) || !ap.contains(AccessPermissions::EL0_EXECUTE) {
+        page_desc.modify(STAGE1_PAGE_DESCRIPTOR::UXN::SET);
     }
 
     match device {
@@ -547,17 +773,17 @@ fn parse_access_perms_pd(page_desc: &Stage1PageDescriptor) -> AccessPermissions 
 }
 
 fn parse_access_perms(ap: u64) -> AccessPermissions {
-    if ap == STAGE1_PAGE_DESCRIPTOR::AP::RW_EL1.value {
-        AccessPermissions::EL1_READ | AccessPermissions::EL1_WRITE
-    } else if ap == STAGE1_PAGE_DESCRIPTOR::AP::RW_EL1_EL0.value {
+    if ap == STAGE1_PAGE_DESCRIPTOR::AP::RW_EL1_EL0.value {
         AccessPermissions::EL1_READ
             | AccessPermissions::EL1_WRITE
             | AccessPermissions::EL0_READ
             | AccessPermissions::EL0_WRITE
-    } else if ap == STAGE1_PAGE_DESCRIPTOR::AP::RO_EL1.value {
-        AccessPermissions::EL1_READ
+    } else if ap == STAGE1_PAGE_DESCRIPTOR::AP::RW_EL1.value {
+        AccessPermissions::EL1_READ | AccessPermissions::EL1_WRITE
     } else if ap == STAGE1_PAGE_DESCRIPTOR::AP::RO_EL1_EL0.value {
         AccessPermissions::EL1_READ | AccessPermissions::EL0_READ
+    } else if ap == STAGE1_PAGE_DESCRIPTOR::AP::RO_EL1.value {
+        AccessPermissions::EL1_READ
     } else {
         bug!("Invalid Access Permissions on page");
     }
@@ -565,6 +791,12 @@ fn parse_access_perms(ap: u64) -> AccessPermissions {
 
 fn new_stage1_table_desc(next_level_addr: u64) -> u64 {
     let table_desc = Stage1TableDescriptor::new(0);
+
+    assert_ne!(next_level_addr, 0);
+    assert_eq!(
+        next_level_addr & ((1 << NEXT_LEVEL_TABLE_ADDR_SHIFT) - 1),
+        0
+    );
 
     table_desc.modify(STAGE1_TABLE_DESCRIPTOR::VALID::True + STAGE1_TABLE_DESCRIPTOR::TYPE::Table);
     table_desc.modify(
@@ -577,6 +809,8 @@ fn new_stage1_table_desc(next_level_addr: u64) -> u64 {
 
 fn new_stage1_page_desc(output_address: u64, attributes: u64) -> u64 {
     let page_desc = Stage1PageDescriptor::new(attributes);
+
+    assert_eq!(output_address & ((1 << LEVEL_3_OUTPUT_ADDR_SHIFT) - 1), 0);
 
     page_desc.modify(STAGE1_PAGE_DESCRIPTOR::VALID::True + STAGE1_PAGE_DESCRIPTOR::TYPE::Page);
     page_desc.modify(
@@ -607,14 +841,20 @@ fn new_stage1_block_desc(level: BlockDescLevel, output_address: u64, attributes:
     block_desc.modify(STAGE1_BLOCK_DESCRIPTOR::VALID::True + STAGE1_BLOCK_DESCRIPTOR::TYPE::Block);
 
     match level {
-        BlockDescLevel::One => block_desc.modify(
-            STAGE1_BLOCK_DESCRIPTOR::OUTPUT_ADDR_1GiB
-                .val(output_address >> LEVEL_1_OUTPUT_ADDR_SHIFT),
-        ),
-        BlockDescLevel::Two => block_desc.modify(
-            STAGE1_BLOCK_DESCRIPTOR::OUTPUT_ADDR_2MiB
-                .val(output_address >> LEVEL_2_OUTPUT_ADDR_SHIFT),
-        ),
+        BlockDescLevel::One => {
+            assert_eq!(output_address & ((1 << LEVEL_1_OUTPUT_ADDR_SHIFT) - 1), 0);
+            block_desc.modify(
+                STAGE1_BLOCK_DESCRIPTOR::OUTPUT_ADDR_1GiB
+                    .val(output_address >> LEVEL_1_OUTPUT_ADDR_SHIFT),
+            )
+        }
+        BlockDescLevel::Two => {
+            assert_eq!(output_address & ((1 << LEVEL_2_OUTPUT_ADDR_SHIFT) - 1), 0);
+            block_desc.modify(
+                STAGE1_BLOCK_DESCRIPTOR::OUTPUT_ADDR_2MiB
+                    .val(output_address >> LEVEL_2_OUTPUT_ADDR_SHIFT),
+            )
+        }
     }
 
     block_desc.get()
@@ -625,42 +865,18 @@ mod tests {
     extern crate std;
 
     use rand::{seq::SliceRandom, thread_rng, Rng};
-    use std::{
-        alloc::{self, Layout},
-        ops::Range,
-        vec::Vec,
-    };
+    use std::{alloc::System, vec::Vec};
 
-    use crate::address::VirtualAddress;
-    use crate::mmu::translation_table::TranslationTable;
-    use crate::mmu::GRANULE_SIZE;
-    use crate::vm::{AccessPermissions, MapDesc, MemoryKind};
     use crate::{
-        address::{Address, PhysicalAddress},
-        error::Result,
-        mmu::translation_table::NUM_TABLE_DESC_ENTRIES,
-        vm::{MemoryMap, PhysicalPageAllocator},
+        address::{PhysicalAddress, VirtualAddress},
+        mmu::{
+            translation_table::{TranslationTable, NUM_TABLE_DESC_ENTRIES},
+            GRANULE_SIZE,
+        },
+        vm::{AccessPermissions, MapDesc, MemoryKind, MemoryMap, PhysicalPageAllocator},
     };
 
-    struct PageAllocator {}
-
-    impl PhysicalPageAllocator for PageAllocator {
-        fn alloc(&mut self, layout: Layout) -> Result<Range<PhysicalAddress>> {
-            let ptr = unsafe { alloc::alloc(layout) };
-            if ptr.is_null() {
-                return Err(Error::PhysicalOOM);
-            }
-            let start = PhysicalAddress::new(ptr as usize);
-            let phy_start = PhysicalAddress::new(ptr as usize);
-
-            Ok(phy_start..phy_start + layout.size())
-        }
-
-        fn free(&mut self, phy_pages: &Range<PhysicalAddress>, layout: Layout) -> Result<()> {
-            unsafe { alloc::dealloc(phy_pages.start.as_mut_ptr::<u8>(), layout) };
-            Ok(())
-        }
-    }
+    use super::{FOUR_KIB, ONE_GIB, TWO_MIB};
 
     #[warn(non_snake_case)]
     fn get_a_random_512GiB_range() -> u32 {
@@ -674,20 +890,17 @@ mod tests {
     }
 
     fn get_random_virt_addr() -> VirtualAddress {
-        VirtualAddress::new(0).unwrap()
-        // VirtualAddress::new(
-        //     rand::thread_rng()
-        //         .gen_range(0..512 * 1024 * 1024 * 1024u64)
-        //         .next_multiple_of(GRANULE_SIZE),
-        // )
+        VirtualAddress::new(
+            rand::thread_rng()
+                .gen_range(0..512 * 1024 * 1024 * 1024usize)
+                .next_multiple_of(GRANULE_SIZE),
+        )
+        .unwrap()
     }
 
-    #[warn(non_snake_case)]
-    fn generate_memory_maps() -> Vec<MemoryMap> {
-        const ONE_GIB: usize = 1024 * 1024 * 1024;
-        const TWO_MIB: usize = 2 * 1024 * 1024;
-        const FOUR_KIB: usize = 4 * 1024;
+    impl PhysicalPageAllocator for System {}
 
+    fn generate_memory_maps() -> Vec<MemoryMap> {
         let mut virt_addr = get_random_virt_addr();
         let rand_1GiB_ranges = get_random_range(0, NUM_TABLE_DESC_ENTRIES as u32);
         let rand_2MiB_ranges = get_random_range(0, NUM_TABLE_DESC_ENTRIES as u32);
@@ -743,9 +956,9 @@ mod tests {
 
     #[test]
     fn it_works() {
-        let mut page_alloc = PageAllocator {};
+        let page_alloc = System {};
         let memory_maps = generate_memory_maps();
-        let translation_table = TranslationTable::new(&memory_maps, &mut page_alloc);
+        let translation_table = TranslationTable::new(&memory_maps, &page_alloc);
 
         assert!(translation_table.is_ok());
 
@@ -756,6 +969,7 @@ mod tests {
                 MemoryMap::Normal(desc) => {
                     let vaddr = desc.virtual_address();
                     let translation = translation_table.virt2phy(vaddr);
+                    println!("");
 
                     assert!(translation.is_some());
 

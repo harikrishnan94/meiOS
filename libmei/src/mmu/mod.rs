@@ -159,8 +159,8 @@ register_bitfields! {u64,
         AttrIndx OFFSET(2) NUMBITS(3) [],
 
         TYPE OFFSET(1) NUMBITS(1) [
-            Reserved_Invalid = 0,
-            Block = 1
+            Reserved_Invalid = 1,
+            Block = 0
         ],
 
         VALID OFFSET(0) NUMBITS(1) [
