@@ -3,5 +3,5 @@
         "*.s": "arm",
         "*.S": "arm",
     },
-    "cmake.copyCompileCommands": "${workspaceFolder}/out/compile_commands.json"
+    "cmake.copyCompileCommands": "${workspaceFolder}/out/compile_commands.json",
 }

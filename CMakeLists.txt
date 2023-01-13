@@ -12,6 +12,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set(CMAKE_CXX_STANDARD 20)
 
 find_program(CCACHE_PROGRAM ccache)
+
 if(CCACHE_PROGRAM)
     set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCACHE_PROGRAM}")
 endif()
@@ -21,5 +22,4 @@ set(MEI_INCLUDE_DIR "${PROJECT_SOURCE_DIR}/include")
 include(WarningFlags)
 
 add_warning_flags()
-add_subdirectory(boot)
 add_subdirectory(src)
