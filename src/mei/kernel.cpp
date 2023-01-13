@@ -3,9 +3,10 @@
 #include <cstdint>
 #include <random>
 
-#include "mei/cpp/fmt/color.h"
-#include "mei/cpp/fmt/ranges.h"
+#include "mei/fmt/color.h"
+#include "mei/fmt/ranges.h"
 #include "mei/kmain.h"
+#include "mei/register/access.h"
 
 extern "C" void abort(void) {
   while (true) {
@@ -181,34 +182,22 @@ void uart_puts(const char *str) {
   for (size_t i = 0; str[i] != '\0'; i++) uart_putc((unsigned char)str[i]);
 }
 
-[[gnu::noinline]] static auto get_str() -> std::array<char, 64> {
-  std::string_view ALNUM = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  std::mt19937_64 gen(std::bit_cast<uint64_t>(&get_str));
-  std::uniform_int_distribution<> alnum_ind_dist(0, ALNUM.length() - 1);
-  std::array<char, 64> str = {'\0'};
-
-  for (int i = 0; i < 63; i++) {
-    const auto ind = alnum_ind_dist(gen);
-    str[i] = ALNUM[ind];
-  }
-
-  return str;
-}
-
-static auto str = [] { return get_str(); }();
+using namespace mei;
+using namespace mei::bits;
+using namespace mei::registers;
 
 /* Use C linkage for MEI_MAIN. */
 extern "C" void MEI_MAIN() {
-  char st[128] = {};
-  // initialize UART for Raspi2
-  fmt::format_to(&st[0],
-                 fmt::emphasis::bold | fg(fmt::color::red),
-                 "Hello, Kernel World! - {}\n",
-                 str.data(),
-                 fmt::join({1, 2, 3, 4}, ", "));
+  char str[100] = {};
+  uart_init(3);
 
-  uart_init(2);
-  uart_puts(&st[0]);
+  using Enable = Field<"Enable", 0, 1>;
+  using TXE = Field<"TXE", 8, 2>;
+  using RXE = Field<"TXE", 10, 1>;
 
-  while (true) uart_putc(uart_getc());
+  std::integral_constant<u64, CreateMask<u64, Enable, TXE, RXE>()> C;
+
+  fmt::format_to(&str[0], "0x{:X}\n", C.value);
+
+  uart_puts(&str[0]);
 }

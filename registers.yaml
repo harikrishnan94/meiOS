@@ -1,0 +1,448 @@
+output: "regs.h"
+
+# UART Register Bitfields
+uart:
+  u64:
+    # Control Register
+    - Control:
+        # UART enable
+        Enable: 0
+        # Transmit enable
+        TXE: 8
+        # Receive enable
+        RXE: 9
+
+    # Flag Register
+    - Flag:
+        # UART is busy transmitting data?
+        BUSY: 3
+        # Receive FIFO Empty?
+        RXFE: 4
+        # Transmit FIFO Full?
+        TXFF: 5
+
+    # Line Control Register
+    - LineControl:
+        # Enable FIFOs
+        FEN: 4
+        # Word length. These bits indicate the number of data bits transmitted or received in a frame as follows
+        WLEN: 5,2
+
+    # Data Register
+    - Data:
+        # Data
+        DR: 0,8
+
+# MMU Related Decriptors
+mmu:
+  64:
+    # A table descriptor (level 0), as per ARMv8-A Architecture Reference Manual Figure D8-12.
+    - STAGE1_TABLE_DESCRIPTOR:
+        # Physical address of the next descriptor.
+        NEXT_LEVEL_TABLE_ADDR: 12:47 # [47:12]
+
+        TYPE:
+          - 1,1:
+              Block: 0
+              Table: 1
+
+        Valid:
+          - 0,1:
+              False: 0
+              True: 1
+
+    # Block descriptors for level 1 and 2, as per ARMv8-A Architecture Reference Manual Figure D8-14.
+    # Block descriptors can be used to implement Hugepages by compressing Translation Table.
+    - STAGE1_BLOCK_DESCRIPTOR:
+        # Bits for Software Use
+        SWUSE: 55,4
+
+        # Unprivileged execute-never.
+        UXN:
+          - 54,1:
+              False: 0
+              True: 1
+
+        # Unprivileged execute-never.
+        PXN:
+          - 53,1:
+              False: 0
+              True: 1
+
+      # Bits [47:30] of Output Address. Points to a 1GiB Physical Page.
+      OUTPUT_ADDR_1GiB: 30,18
+      # Bits [47:21] of Output Address. Points to a 2MiB Physical Page.
+      OUTPUT_ADDR_2MiB: 21,27
+
+      # Access flag.
+      AF:
+        - 10,1:
+            True: 1
+            False: 0
+
+      # Shareability field.
+      SH:
+        - 8,2:
+            OuterShareable: 0b10
+            InnerShareable: 0b11
+
+      # Access Permissions.
+      AP:
+        - 6,2:
+          RW_EL1: 0b00
+          RW_EL1_EL0: 0b01
+          RO_EL1: 0b10
+          RO_EL1_EL0: 0b11
+
+      # Memory attributes index into the MAIR_EL1 register.
+      AttrIndx: 2,3
+
+      TYPE:
+        1:
+          Reserved_Invalid: 1
+          Block: 0
+
+      Valid:
+        0:
+          False: 0
+          True: 1
+
+    # A level 3 page descriptor, as per ARMv8-A Architecture Reference Manual Figure D5-17.
+    - STAGE1_PAGE_DESCRIPTOR:
+        # Bits for Software Use
+        SWUSE: 55,4
+
+        # Unprivileged execute-never.
+        UXN:
+          - 54,1:
+              False: 0
+              True: 1
+
+        # Unprivileged execute-never.
+        PXN:
+          - 53,1:
+              False: 0
+              True: 1
+
+        # Bits [47:12] of Output Address. Points to a 4KiB Physical Page.
+        OUTPUT_ADDR_4KiB: 47:12
+
+        # Access flag.
+        AF:
+          - 10,1: { True: 1, False: 0 }
+
+        # Shareability field.
+        SH:
+          - 8,2:
+              OuterShareable: 0b10
+              InnerShareable: 0b11
+
+        # Access Permissions.
+        AP:
+          - 6,2:
+            RW_EL1: 0b00
+            RW_EL1_EL0: 0b01
+            RO_EL1: 0b10
+            RO_EL1_EL0: 0b11
+
+        # Memory attributes index into the MAIR_EL1 register.
+        AttrIndx: 2,3
+
+        TYPE:
+          1:
+            Reserved_Invalid: 0
+            Page: 1
+
+        Valid:
+          0:
+            False: 0
+            True: 1
+
+system_control:
+  u64:
+    # System Control Register - EL1
+    #
+    # Provides top level control of the system, including its memory system, at EL1 and EL0.
+    - SCTLR_EL1:
+        # Traps EL0 execution of cache maintenance instructions to EL1, from AArch64 state only.
+        #
+        # 0 Any attempt to execute a DC CVAU, DC CIVAC, DC CVAC, DC CVAP, or IC IVAU
+        #   instruction at EL0 using AArch64 is trapped to EL1.
+        # 1 This control does not cause any instructions to be trapped.
+        #
+        # When ARMv8.1-VHE is implemented, and the value of HCR_EL2.{E2H, TGE} is {1, 1}, this bit
+        # has no effect on execution at EL0.
+        #
+        # If the Point of Coherency is before any level of data cache, it is IMPLEMENTATION DEFINED whether
+        # the execution of any data or unified cache clean, or clean and invalidate instruction that operates by
+        # VA to the point of coherency can be trapped when the value of this control is 1.
+        #
+        # If the Point of Unification is before any level of data cache, it is IMPLEMENTATION DEFINED whether
+        # the execution of any data or unified cache clean by VA to the point of unification instruction can be
+        # trapped when the value of this control is 1.
+        #
+        # If the Point of Unification is before any level of instruction cache, it is IMPLEMENTATION DEFINED
+        # whether the execution of any instruction cache invalidate by VA to the point of unification
+        # instruction can be trapped when the value of this control is 1.
+        UCI:
+          26,1:
+            Trap: 0
+            DontTrap: 1
+
+        # Endianness of data accesses at EL1, and stage 1 translation table walks in the EL1&0 translation regime.
+        #
+        # 0 Explicit data accesses at EL1, and stage 1 translation table walks in the EL1&0
+        #   translation regime are little-endian.
+        # 1 Explicit data accesses at EL1, and stage 1 translation table walks in the EL1&0
+        #   translation regime are big-endian.
+        #
+        # If an implementation does not provide Big-endian support at Exception Levels higher than EL0, this
+        # bit is RES 0.
+        #
+        # If an implementation does not provide Little-endian support at Exception Levels higher than EL0,
+        # this bit is RES 1.
+        #
+        # The EE bit is permitted to be cached in a TLB.
+        #
+        # When ARMv8.1-VHE is implemented, and the value of HCR_EL2.{E2H, TGE} is {1, 1}, this bit
+        # has no effect on the PE.
+        EE:
+          25,1:
+            LittleEndian: 0
+            BigEndian: 1
+
+        # Endianness of data accesses at EL0.
+        #
+        # 0 Explicit data accesses at EL0 are little-endian.
+        #
+        # 1 Explicit data accesses at EL0 are big-endian.
+        #
+        # If an implementation only supports Little-endian accesses at EL0 then this bit is RES 0. This option
+        # is not permitted when SCTLR_EL1.EE is RES 1.
+        #
+        # If an implementation only supports Big-endian accesses at EL0 then this bit is RES 1. This option is
+        # not permitted when SCTLR_EL1.EE is RES 0.
+        #
+        # This bit has no effect on the endianness of LDTR , LDTRH , LDTRSH , LDTRSW , STTR , and STTRH instructions
+        # executed at EL1.
+        #
+        # When ARMv8.1-VHE is implemented, and the value of HCR_EL2.{E2H, TGE} is {1, 1}, this bit
+        # has no effect on execution at EL0.
+        E0E:
+          24,1:
+            LittleEndian: 0
+            BigEndian: 1
+
+        # Write permission implies XN (Execute-never). For the EL1&0 translation regime, this bit can force
+        # all memory regions that are writable to be treated as XN.
+        #
+        # 0 This control has no effect on memory access permissions.
+        #
+        # 1 Any region that is writable in the EL1&0 translation regime is forced to XN for accesses
+        #   from software executing at EL1 or EL0.
+        #
+        # The WXN bit is permitted to be cached in a TLB.
+        #
+        # When ARMv8.1-VHE is implemented, and the value of HCR_EL2.{E2H, TGE} is {1, 1}, this bit
+        # has no effect on the PE.
+        WXN:
+          19,1:
+            Disable: 0
+            Enable: 1
+
+        # Traps EL0 execution of WFE instructions to EL1, from both Execution states.
+        #
+        # 0 Any attempt to execute a WFE instruction at EL0 is trapped to EL1, if the instruction
+        #   would otherwise have caused the PE to enter a low-power state.
+        #
+        # 1 This control does not cause any instructions to be trapped.
+        #
+        # In AArch32 state, the attempted execution of a conditional WFE instruction is only trapped if the
+        # instruction passes its condition code check.
+        #
+        # **Note:**
+        #
+        # Since a WFE or WFI can complete at any time, even without a Wakeup event, the traps on WFE of
+        # WFI are not guaranteed to be taken, even if the WFE or WFI is executed when there is no Wakeup
+        # event. The only guarantee is that if the instruction does not complete in finite time in the
+        # absence of a Wakeup event, the trap will be taken.
+        #
+        # When ARMv8.1-VHE is implemented, and the value of HCR_EL2.{E2H, TGE} is {1, 1}, this bit
+        # has no effect on execution at EL0.
+        NTWE:
+          18,1:
+            Trap: 0
+            DontTrap: 1
+
+        # Traps EL0 executions of WFI instructions to EL1, from both execution states:
+        #
+        # 0 Any attempt to execute a WFI instruction at EL0 is trapped EL1, if the instruction would
+        #   otherwise have caused the PE to enter a low-power state.
+        #
+        # 1 This control does not cause any instructions to be trapped.
+        #
+        # In AArch32 state, the attempted execution of a conditional WFI instruction is only trapped if the
+        # instruction passes its condition code check.
+        #
+        # **Note:**
+        #
+        # Since a WFE or WFI can complete at any time, even without a Wakeup event, the traps on WFE of
+        # WFI are not guaranteed to be taken, even if the WFE or WFI is executed when there is no Wakeup
+        # event. The only guarantee is that if the instruction does not complete in finite time in the
+        # absence of a Wakeup event, the trap will be taken.
+        #
+        # When ARMv8.1-VHE is implemented, and the value of HCR_EL2.{E2H, TGE} is {1, 1}, this bit
+        # has no effect on execution at EL0.
+        NTWI:
+          16,1:
+            Trap: 0
+            DontTrap: 1
+
+        # Traps EL0 accesses to the CTR_EL0 to EL1, from AArch64 state only.
+        #
+        # 0 Accesses to the CTR_EL0 from EL0 using AArch64 are trapped to EL1.
+        #
+        # 1 This control does not cause any instructions to be trapped.
+        #
+        # When ARMv8.1-VHE is implemented, and the value of HCR_EL2.{E2H, TGE} is {1, 1}, this bit
+        # has no effect on execution at EL0.
+        UCT:
+          15,1:
+            Trap: 0
+            DontTrap: 1
+
+        # Traps EL0 execution of DC ZVA instructions to EL1, from AArch64 state only.
+        #
+        # 0 Any attempt to execute a DC ZVA instruction at EL0 using AArch64 is trapped to EL1.
+        #   Reading DCZID_EL0.DZP from EL0 returns 1, indicating that DC ZVA instructions
+        #   are not supported.
+        #
+        # 1 This control does not cause any instructions to be trapped.
+        #
+        # When ARMv8.1-VHE is implemented, and the value of HCR_EL2.{E2H, TGE} is {1, 1}, this bit
+        # has no effect on execution at EL0.
+        DZE:
+          14,1:
+            Trap: 0
+            DontTrap: 1
+
+        # Instruction access Cacheability control, for accesses at EL0 and
+        # EL1:
+        #
+        # 0 All instruction access to Normal memory from EL0 and EL1 are Non-cacheable for all
+        #   levels of instruction and unified cache.
+        #
+        #   If the value of SCTLR_EL1.M is 0, instruction accesses from stage 1 of the EL1&0
+        #   translation regime are to Normal, Outer Shareable, Inner Non-cacheable, Outer
+        #   Non-cacheable memory.
+        #
+        # 1 This control has no effect on the Cacheability of instruction access to Normal memory
+        #   from EL0 and EL1.
+        #
+        #   If the value of SCTLR_EL1.M is 0, instruction accesses from stage 1 of the EL1&0
+        #   translation regime are to Normal, Outer Shareable, Inner Write-Through, Outer
+        #   Write-Through memory.
+        #
+        # When the value of the HCR_EL2.DC bit is 1, then instruction access to Normal memory from
+        # EL0 and EL1 are Cacheable regardless of the value of the SCTLR_EL1.I bit.
+        #
+        # When ARMv8.1-VHE is implemented, and the value of HCR_EL2.{E2H, TGE} is {1, 1}, this bit
+        # has no effect on the PE.
+        #
+        # When this register has an architecturally-defined reset value, this field resets to 0.
+        I:
+          12,1:
+            NonCacheable: 0
+            Cacheable:
+
+        # User Mask Access. Traps EL0 execution of MSR and MRS instructions that access the
+        # PSTATE.{D, A, I, F} masks to EL1, from AArch64 state only.
+        #
+        # 0 Any attempt at EL0 using AArch64 to execute an MRS , MSR(register) , or MSR(immediate)
+        #   instruction that accesses the [`DAIF`](module@super::super::DAIF) is trapped to EL1.
+        #
+        # 1 This control does not cause any instructions to be trapped.
+        #
+        # When ARMv8.1-VHE is implemented, and the value of HCR_EL2.{E2H, TGE} is {1, 1}, this bit
+        # has no effect on execution at EL0.
+        UMA:
+          9,1:
+            Trap: 0
+            DontTrap: 1
+
+        # Non-aligned access. This bit controls generation of Alignment faults at EL1 and EL0 under certain conditions.
+        #
+        # LDAPR, LDAPRH, LDAPUR, LDAPURH, LDAPURSH, LDAPURSW, LDAR, LDARH, LDLAR, LDLARH,
+        # STLLR, STLLRH, STLR, STLRH, STLUR, and STLURH will or will not generate an Alignment
+        # fault if all bytes being accessed are not within a single 16-byte quantity,
+        # aligned to 16 bytes for accesses.
+        NAA:
+          6,1:
+            Disable: 0
+            Enable:
+
+        # SP Alignment check enable for EL0.
+        #
+        # When set to 1, if a load or store instruction executed at EL0 uses the SP
+        # as the base address and the SP is not aligned to a 16-byte boundary,
+        # then a SP alignment fault exception is generated.
+        SA0:
+          4,1:
+            Disable: 0
+            Enable:
+
+        # SP Alignment check enable.
+        #
+        # When set to 1, if a load or store instruction executed at EL1 uses the SP
+        # as the base address and the SP is not aligned to a 16-byte boundary,
+        # then a SP alignment fault exception is generated.
+        SA:
+          3,1:
+            Disable: 0
+            Enable:
+
+        # Cacheability control, for data accesses.
+        #
+        # 0 All data access to Normal memory from EL0 and EL1, and all Normal memory accesses to
+        #   the EL1&0 stage 1 translation tables, are Non-cacheable for all levels of data and
+        #   unified cache.
+        #
+        # 1 This control has no effect on the Cacheability of:
+        #   - Data access to Normal memory from EL0 and EL1.
+        #   - Normal memory accesses to the EL1&0 stage 1 translation tables.
+        #
+        # When the value of the HCR_EL2.DC bit is 1, the PE ignores SCLTR.C. This means that
+        # Non-secure EL0 and Non-secure EL1 data accesses to Normal memory are Cacheable.
+        #
+        # When ARMv8.1-VHE is implemented, and the value of HCR_EL2.{E2H, TGE} is {1, 1}, this bit
+        # has no effect on the PE.
+        #
+        # When this register has an architecturally-defined reset value, this field resets to 0.
+        C:
+          2,1:
+            NonCacheable: 0
+            Cacheable:
+
+        # Alignment check enable. This is the enable bit for Alignment fault checking at EL1 and EL0.
+        #
+        # Instructions that load or store one or more registers, other than load/store exclusive
+        # and load-acquire/store-release, will or will not check that the address being accessed
+        # is aligned to the size of the data element(s) being accessed depending on this flag.
+        #
+        # Load/store exclusive and load-acquire/store-release instructions have an alignment check
+        # regardless of the value of the A bit.
+        A:
+          1,1:
+            Disable: 0
+            Enable:
+
+        # MMU enable for EL1 and EL0 stage 1 address translation. Possible values of this bit are:
+        #
+        # 0 EL1 and EL0 stage 1 address translation disabled.
+        #   - See the SCTLR_EL1.I field for the behavior of instruction accesses to Normal memory.
+        #
+        # 1 EL1 and EL0 stage 1 address translation enabled.
+        M:
+          0,1:
+            Disable: 0
+            Enable:
