@@ -10,7 +10,7 @@
             "processCreateCommands": [
                 "gdb-remote localhost:1234"
             ],
-            "preLaunchTask": "Run Mei Kernel",
+            "preLaunchTask": "Debug Mei",
         },
     ]
 }

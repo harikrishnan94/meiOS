@@ -22,7 +22,8 @@ else()
 endif()
 
 set(CMAKE_C_FLAGS_INIT "-ffreestanding -mgeneral-regs-only -fPIC")
-set(CMAKE_CXX_FLAGS_INIT "${CMAKE_C_FLAGS_INIT} -fno-exceptions -fno-rtti -fno-threadsafe-statics")
+set(CMAKE_CXX_FLAGS_INIT
+    "${CMAKE_C_FLAGS_INIT} -fno-exceptions -fno-unwind-tables -fno-rtti -fno-threadsafe-statics")
 set(CMAKE_EXE_LINKER_FLAGS_INIT "-nostdlib")
 
 if(USE_CLANG)

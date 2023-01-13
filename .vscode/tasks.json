@@ -10,7 +10,6 @@
                 "Build",
                 "Generate Clangd Config (Update compile_commands.json)"
             ],
-            "dependsOrder": "sequence",
             "problemMatcher": []
         },
         {
@@ -31,17 +30,19 @@
                 "${env:ARM_GCC_TOOLCHAIN_PATH}/aarch64-none-elf-g++",
                 "${workspaceFolder}/out/compile_commands.json",
                 "${workspaceFolder}/compile_commands.json"
-            ]
+            ],
+            "problemMatcher": []
         },
         {
             "type": "shell",
-            "label": "Run Mei Kernel",
+            "label": "Debug Mei",
+            "detail": "Launch mei Kernel under debugger",
             "command": "${workspaceFolder}/qemu-system-aarch64",
             "args": [
                 "-M",
                 "raspi3b",
                 "-kernel",
-                "${command:cmake.buildDirectory}/mei",
+                "${command:cmake.buildDirectory}/kernel8.img",
                 "-nographic",
                 "-s",
                 "-S"

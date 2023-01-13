@@ -2,9 +2,6 @@
     "files.associations": {
         "*.s": "arm",
         "*.S": "arm",
-        "cstddef": "cpp",
-        "ranges": "cpp",
-        "cstdint": "cpp"
     },
     "cmake.copyCompileCommands": "${workspaceFolder}/out/compile_commands.json"
 }

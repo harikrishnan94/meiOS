@@ -4,48 +4,62 @@
 
 // AArch64 mode
 
-// In 64 bit mode, bootcode is loaded at 0x80000 not in 0x8000.
-#define BOOT_ADDRESS 0x80000
-
-
-// To keep this in the first portion of the binary.
+/* To keep this in the first portion of the binary. */
 .section ".text.boot"
 
-// Make _start global
 .globl _start
-    .org BOOT_ADDRESS
-
-// Entry point for kernel.
-// Registers:
-// x0 -> 32bit pointer to DTB in memory (primary core only) / 0 (secondary cores)
-// x1 -> 0
-// x2 -> 0
-// x3 -> 0
-// x4 -> 32 bit kernel entry point, _start location.
 _start:
-    mrs     x1, mpidr_el1
-    and     x1, x1, #3
-    cbz     x1, 2f
-    // We're not on the main core, so hang in an infinite wait loop
-1:  wfe
-    b       1b
+    /* Load current running core ID into x0 */
+    mrs x0, MPIDR_EL1
+    and x0, x0, #CPUID_MASK
+    /* Exit if we're not in 0th core */
+    cmp x0, #BOOT_CORE_ID
+    bne 1f
 
-2:  // We're on the main core!
-    // set the stack before our code.
-    ldr x5, =_start
-    mov sp, x5
+    /* Get current exception level in x0 */
+    mrs x0, CurrentEL
+    lsr x0, x0, #EL_BITS_OFFSET
+    /* Exit if current exception level is not 2 (Hypervisor Level) */
+    cmp x0, #HYP_MODE_EL
 
-    // clear bss
-    ldr x5, =__bss_start
-    ldr w6, =__bss_size
-3:  cbz w6, 4f
-    str xzr, [x5], #8
-    sub w6, w6, #1
-    cbnz w6, 3b
+    /* We're in 0th core and in EL 2. Start exectuting the kernel */
+    beq 2f
 
-    // Jump into C code. Shouldn't return
-4:  bl MEI_MAIN
-    // for failsafe, halt this core too
-5:  wfe
-	b 5b
+1:
+    wfe
+    b 1b
 
+2:
+    /* initialize BSS */
+    ldr x0, =__bss_start
+    ldr x1, =__bss_end
+    cmp x0, x1
+    bge 4f
+3:
+    str xzr, [x0]
+    add x0, x0, #8
+    cmp x0, x1
+    bne 3b
+
+4:
+    /* setup stack pointer to enable C functions */
+    ldr x0, =_start
+    mov sp, x0
+
+    /* Call constructors and initialize static variables */
+    bl __libc_init_array
+
+    /* Jump into C code. Shouldn't return */
+    bl MEI_MAIN
+    bl __libc_fini_array
+    b 1b
+
+
+.section ".text.cold"
+.global _init
+_init:
+    ret
+
+.global _fini
+_fini:
+    ret

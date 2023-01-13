@@ -1,7 +1,22 @@
+#include <array>
 #include <cstddef>
 #include <cstdint>
+#include <random>
 
+#include "mei/cpp/fmt/color.h"
+#include "mei/cpp/fmt/ranges.h"
 #include "mei/kmain.h"
+
+extern "C" void abort(void) {
+  while (true) {
+  }
+}
+
+extern "C" void __assert(const char *, int, const char *) { abort(); }
+extern "C" void __assert_func(const char *, int, const char *, const char *) { abort(); }
+extern "C" void fmt_assert_fail(const char *file, int line, const char *message) {
+  __assert(file, line, message);
+}
 
 static uint32_t MMIO_BASE;  // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
@@ -29,12 +44,12 @@ static inline void mmio_init(int raspi) {
 
 // Memory-Mapped I/O output
 static inline void mmio_write(uint32_t reg, uint32_t data) {
-  *(volatile uint32_t*)(uintptr_t)(MMIO_BASE + reg) = data;  // NOLINT(performance-no-int-to-ptr)
+  *(volatile uint32_t *)(uintptr_t)(MMIO_BASE + reg) = data;  // NOLINT(performance-no-int-to-ptr)
 }
 
 // Memory-Mapped I/O input
 static inline uint32_t mmio_read(uint32_t reg) {
-  return *(volatile uint32_t*)(uintptr_t)(MMIO_BASE + reg);  // NOLINT(performance-no-int-to-ptr)
+  return *(volatile uint32_t *)(uintptr_t)(MMIO_BASE + reg);  // NOLINT(performance-no-int-to-ptr)
 }
 
 // Loop <delay> times in a way that the compiler won't optimize away
@@ -162,26 +177,38 @@ unsigned char uart_getc() {
   return mmio_read(UART0_DR);
 }
 
-void uart_puts(const char* str) {
+void uart_puts(const char *str) {
   for (size_t i = 0; str[i] != '\0'; i++) uart_putc((unsigned char)str[i]);
 }
 
-#if defined(__cplusplus)
-extern "C" /* Use C linkage for MEI_MAIN. */
-#endif
+[[gnu::noinline]] static auto get_str() -> std::array<char, 64> {
+  std::string_view ALNUM = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  std::mt19937_64 gen(std::bit_cast<uint64_t>(&get_str));
+  std::uniform_int_distribution<> alnum_ind_dist(0, ALNUM.length() - 1);
+  std::array<char, 64> str = {'\0'};
 
-#ifdef __aarch64__
-    // arguments for __aarch64__
-    void
-    MEI_MAIN()
-#else
-// arguments for AArch32
-void MEI_MAIN(uint64_t dtb_ptr32, uint32_t corenum)
-#endif
-{
+  for (int i = 0; i < 63; i++) {
+    const auto ind = alnum_ind_dist(gen);
+    str[i] = ALNUM[ind];
+  }
+
+  return str;
+}
+
+static auto str = [] { return get_str(); }();
+
+/* Use C linkage for MEI_MAIN. */
+extern "C" void MEI_MAIN() {
+  char st[128] = {};
   // initialize UART for Raspi2
+  fmt::format_to(&st[0],
+                 fmt::emphasis::bold | fg(fmt::color::red),
+                 "Hello, Kernel World! - {}\n",
+                 str.data(),
+                 fmt::join({1, 2, 3, 4}, ", "));
+
   uart_init(2);
-  uart_puts("Hello, kernel World!\r\n");
+  uart_puts(&st[0]);
 
   while (true) uart_putc(uart_getc());
 }
