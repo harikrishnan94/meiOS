@@ -3,6 +3,8 @@ add_subdirectory(arch)
 add_library(libmei STATIC lib.c)
 target_include_directories(libmei PUBLIC ${MEI_INCLUDE_DIR})
 target_compile_definitions(libmei PUBLIC
+
+    # FMT related config
     FMT_HEADER_ONLY
     FMT_DISABLE_FLOAT
     FMT_STATIC_THOUSANDS_SEPARATOR=','

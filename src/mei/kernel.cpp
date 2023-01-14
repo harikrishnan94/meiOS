@@ -4,6 +4,7 @@
 #include <random>
 
 #include "generated/mmu.h"
+#include "mei/expected.h"
 #include "mei/fmt/format.h"
 #include "mei/kmain.h"
 
@@ -191,7 +192,9 @@ void puts(fmt::format_string<Args...> fmt, Args &&...args) {
   uart_puts(&str[0]);
 }
 
-constexpr auto get_val() {
+enum class error { div_by_zero, not_even };
+
+constexpr auto get_val() -> mei::expected<mei::u64, error> {
   using STAGE1_PAGE_DESCRIPTOR = mmu::STAGE1_PAGE_DESCRIPTOR::Register;
 
   using PageDesc = InMemoryRegister<STAGE1_PAGE_DESCRIPTOR>;
@@ -208,9 +211,19 @@ constexpr auto get_val() {
 
 constinit const auto Val = get_val();
 
+static auto div_exp(int a, int b) -> tl::expected<int, error> {
+  if (b == 0) Err(error::div_by_zero);
+  return a / b;
+}
+
+static auto div_if_even(int a, int b) -> tl::expected<int, error> {
+  if (a % 2 != 0) Err(error::not_even);
+  return Try(div_exp(a, b));
+}
+
 /* Use C linkage for MEI_MAIN. */
 extern "C" void MEI_MAIN() {
   uart_init(3);
 
-  puts("After set = 0x{:X}\n", Val);
+  puts("After set = 0x{:X}\n", Val.value());
 }
