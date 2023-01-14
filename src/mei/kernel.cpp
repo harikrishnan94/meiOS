@@ -3,10 +3,9 @@
 #include <cstdint>
 #include <random>
 
-#include "mei/fmt/color.h"
-#include "mei/fmt/ranges.h"
+#include "generated/mmu.h"
+#include "mei/fmt/format.h"
 #include "mei/kmain.h"
-#include "mei/register/access.h"
 
 extern "C" void abort(void) {
   while (true) {
@@ -182,22 +181,36 @@ void uart_puts(const char *str) {
   for (size_t i = 0; str[i] != '\0'; i++) uart_putc((unsigned char)str[i]);
 }
 
-using namespace mei;
-using namespace mei::bits;
 using namespace mei::registers;
+
+template <typename... Args>
+void puts(fmt::format_string<Args...> fmt, Args &&...args) {
+  char str[128] = {};
+
+  fmt::format_to(&str[0], fmt, std::forward<Args>(args)...);
+  uart_puts(&str[0]);
+}
+
+constexpr auto get_val() {
+  using STAGE1_PAGE_DESCRIPTOR = mmu::STAGE1_PAGE_DESCRIPTOR::Register;
+
+  using PageDesc = InMemoryRegister<STAGE1_PAGE_DESCRIPTOR>;
+
+  PageDesc desc{0};
+  desc.Set(100);
+
+  desc.Modify(STAGE1_PAGE_DESCRIPTOR::OUTPUT_ADDR_4KiB::Value(0xFFFF) +
+              STAGE1_PAGE_DESCRIPTOR::PXN::True - RM<STAGE1_PAGE_DESCRIPTOR::OUTPUT_ADDR_4KiB> -
+              RM<STAGE1_PAGE_DESCRIPTOR::PXN>);
+
+  return desc.Get();
+}
+
+constinit const auto Val = get_val();
 
 /* Use C linkage for MEI_MAIN. */
 extern "C" void MEI_MAIN() {
-  char str[100] = {};
   uart_init(3);
 
-  using Enable = Field<"Enable", 0, 1>;
-  using TXE = Field<"TXE", 8, 2>;
-  using RXE = Field<"TXE", 10, 1>;
-
-  std::integral_constant<u64, CreateMask<u64, Enable, TXE, RXE>()> C;
-
-  fmt::format_to(&str[0], "0x{:X}\n", C.value);
-
-  uart_puts(&str[0]);
+  puts("After set = 0x{:X}\n", Val);
 }

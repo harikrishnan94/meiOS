@@ -11,3 +11,5 @@ target_compile_definitions(libmei PUBLIC
     FMT_NO_STDIO
 )
 target_link_libraries(libmei PUBLIC arch)
+
+add_subdirectory(registers)

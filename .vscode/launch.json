@@ -12,5 +12,18 @@
             ],
             "preLaunchTask": "Debug Mei",
         },
+        {
+            "name": "Python: Current File",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args": [
+                "src/libmei/registers",
+                "mmu.yaml",
+                "config.yaml"
+            ],
+            "justMyCode": true
+        },
     ]
 }

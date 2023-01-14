@@ -20,6 +20,7 @@ endif()
 set(MEI_INCLUDE_DIR "${PROJECT_SOURCE_DIR}/include")
 
 include(WarningFlags)
+include(GenerateRegisters)
 
 add_warning_flags()
 add_subdirectory(src)

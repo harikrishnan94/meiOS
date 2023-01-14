@@ -1,0 +1,94 @@
+output: generated/uart.h
+namespaces:
+  # UART Register Bitfields
+  - namespace:
+      name: mei::registers::uart
+      registers:
+        - register:
+            # Control Register
+            name: Control
+            type: u32
+            fields:
+              # UART enable
+              - Enable: 0
+              # Transmit enable
+              - TXE: 8
+              # Receive enable
+              - RXE: 9
+
+        # Flag Register
+        - register:
+            name: Flag
+            type: u32
+            fields:
+              # UART is busy transmitting data?
+              - BUSY: 3
+              # Receive FIFO Empty?
+              - RXFE: 4
+              # Transmit FIFO Full?
+              - TXFF: 5
+
+        # Line Control Register
+        - register:
+            name: LineControl
+            type: u32
+            fields:
+              # Enable FIFOs
+              - FEN: 4,1
+
+              # Word length. These bits indicate the number of data bits transmitted or received in a frame as follows
+              - WLEN: 5,2
+
+        # Data Register
+        - register:
+            name: Data
+            type: u32
+            fields:
+              # Data
+              - DR: 0,8
+
+        # Integer Baud Rate Register
+        - register:
+            name: IntegerBaudRate
+            type: u32
+            fields:
+              # The integer baud rate divisor
+              - BAUD_DIVINT: 0,16
+
+        # Fractional Baud Rate Register
+        - register:
+            name: FractionalBaudRate
+            type: u32
+            fields:
+              # The fractional baud rate divisor
+              - BAUD_DIVFRAC: 0,6
+
+        # Interrupt Mask Set/Clear Register
+        - register:
+            name: InterruptMaskSetClear
+            type: u32
+            fields:
+              # Receive interrupt mask
+              - RXIM: 4
+              # Transmit interrupt mask
+              - TXIM: 5
+
+        # Masked Interrupt Status Register
+        - register:
+            name: MaskedInterruptStatus
+            type: u32
+            fields:
+              # Receive masked interrupt status
+              - RXMIS: 4
+              # Transmit masked interrupt status
+              - TXMIS: 5
+
+        # MaInterrupt Clear Register
+        - register:
+            name: InterruptClear
+            type: u32
+            fields:
+              # Receive interrupt clear
+              - RXIC: 4
+              # Transmit interrupt clear
+              - TXIC: 5
