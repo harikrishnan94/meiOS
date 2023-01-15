@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cassert>
+#include <string_view>
 
 #include "mei/bitops.h"
 #include "mei/types.h"
@@ -16,6 +17,15 @@ concept field = requires(F)
   { F::Name } -> dtl::same_as<const char *>;
   { F::Offset } -> dtl::same_as<uint>;
   { F::NumBits } -> dtl::same_as<uint>;
+};
+
+// clang-format off
+template <typename F>
+concept enum_field = field<F> && requires(F)
+// clang-format on
+{
+  requires std::is_enum_v<typename F::Enum>;
+  { F::EnumValueToStr(static_cast<REG_INTT(F)>(0)) } -> std::convertible_to<std::string_view>;
 };
 
 template <typename F, typename R>
@@ -47,6 +57,7 @@ concept field_value = requires(FV v)
 // clang-format on
 {
   requires register_t<REG(FV)>;
+  requires field<typename FV::Field>;
   { FV::Mask } -> dtl::same_as<REG(FV)::IntType>;
   { v.Val() } -> dtl::same_as<REG(FV)::IntType>;
   { v.ShiftedVal() } -> dtl::same_as<REG(FV)::IntType>;
@@ -55,21 +66,22 @@ concept field_value = requires(FV v)
 template <typename FV, typename R>
 concept field_value_of = register_t<R> && field_value<FV> && std::same_as<REG(FV), R>;
 
-template <register_t R, uint Offset, uint NumBits>
+template <register_t R, field_of<R> F>
 class FieldValue {
  public:
   using Register = R;
+  using Field = F;
   using ResultType = typename Register::IntType;
 
-  static constexpr ResultType Mask = bits::CreateMask<ResultType>(NumBits, Offset);
+  static constexpr ResultType Mask = bits::CreateMask<ResultType>(Field::NumBits, Field::Offset);
 
-  constexpr FieldValue(ResultType val) : m_val(val & (Mask >> Offset)) {
+  constexpr FieldValue(ResultType val) : m_val(val & (Mask >> Field::Offset)) {
     assert(val == m_val >> Offset);
   }
 
   [[nodiscard]] constexpr auto Val() const -> ResultType { return m_val; }
 
-  [[nodiscard]] constexpr auto ShiftedVal() const -> ResultType { return m_val << Offset; }
+  [[nodiscard]] constexpr auto ShiftedVal() const -> ResultType { return m_val << Field::Offset; }
 
   [[nodiscard]] constexpr auto Modify(ResultType oldval) const -> ResultType {
     return (oldval & ~Mask) | ShiftedVal();
@@ -87,6 +99,6 @@ struct Field {
   static constexpr uint Offset = TOffset;
   static constexpr uint NumBits = TNumBits;
 
-  using Value = FieldValue<Register, Offset, NumBits>;
+  using Value = FieldValue<Register, Field>;
 };
 }  // namespace mei::registers

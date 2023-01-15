@@ -8,6 +8,7 @@
 #include "mei/expected.h"
 #include "mei/fmt/format.h"
 #include "mei/kmain.h"
+#include "mei/register/format.h"
 
 extern "C" void abort(void) {
   while (true) {
@@ -226,9 +227,17 @@ static auto div_if_even(int a, int b) -> tl::expected<int, error> {
 extern "C" void MEI_MAIN() {
   uart_init(3);
 
-  const auto &CurrentEL = mei::registers::exception::CurrentEL::CurrentEL;
-  using CurrentELReg = exception::CurrentEL::Register;
+  using STAGE1_PAGE_DESCRIPTOR = mmu::STAGE1_PAGE_DESCRIPTOR::Register;
 
-  puts("We're at EL{}\n", Read<CurrentELReg::EL>(CurrentEL));
+  using PageDesc = InMemoryRegister<STAGE1_PAGE_DESCRIPTOR>;
+
+  PageDesc desc{0};
+  desc |= STAGE1_PAGE_DESCRIPTOR::OUTPUT_ADDR_4KiB::Value(0xFFFF);
+  puts("{:X}\n", desc);
+
+  const auto &CurrentEL = mei::registers::exception::CurrentEL::CurrentEL;
+  // using CurrentELReg = exception::CurrentEL::Register;
+
+  puts("{}\n", CurrentEL);
   puts("After set = 0x{:X}\n", Val.value());
 }

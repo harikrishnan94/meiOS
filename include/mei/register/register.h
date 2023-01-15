@@ -8,6 +8,7 @@
 
 #define REG(TYPE) typename TYPE::Register
 #define INTT(REG) typename REG::IntType
+#define REG_INTT(TYPE) typename TYPE::Register::IntType
 
 namespace mei::registers {
 namespace dtl {
@@ -32,6 +33,10 @@ concept register_t = requires(R)
   requires std::unsigned_integral<INTT(R)>;
   { R::Name } -> dtl::same_as<const char *>;
 };
+
+template <typename R>
+concept formattable_register =
+    register_t<R> && requires(R) { not std::is_void_v<typename R::FieldTypes>; };
 
 template <std::unsigned_integral I, dtl::fixed_string TName>
 struct Register {

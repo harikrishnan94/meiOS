@@ -4,10 +4,6 @@
 #include "register.h"
 
 namespace mei::registers {
-#define REG(TYPE) typename TYPE::Register
-#define INTT(REG) typename REG::IntType
-#define REG_INTT(TYPE) typename TYPE::Register::IntType
-
 namespace dtl {
 template <register_t R>
 struct any_register_value_modifier {
@@ -172,6 +168,11 @@ static constexpr auto RM = RegisterValueModification{typename F::Value(0)};
 template <field F>
 constexpr auto Read(const register_storage_for<REG(F)> auto &rs) -> REG_INTT(F) {
   return (rs.Get() & MaskFor<F>) >> F::Offset;
+}
+
+template <enum_field F>
+constexpr auto ReadEnum(const register_storage_for<REG(F)> auto &rs) -> typename F::Enum {
+  return static_cast<typename F::Enum>(Read<F>(rs));
 }
 
 constexpr void Modify(
