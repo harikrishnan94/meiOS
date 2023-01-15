@@ -6,7 +6,7 @@ function(generate_registers target src_directory output_directory)
     set(gen_reg_def_py "${PROJECT_SOURCE_DIR}/generate_register_definitions.py")
 
     file(MAKE_DIRECTORY ${output_directory})
-    add_custom_target(${target}-regs DEPENDS ${REGISTER_DEFINITION_FILES})
+    add_custom_target(${target}-regs DEPENDS ${gen_reg_def_py} ${REGISTER_DEFINITION_FILES})
     add_custom_command(TARGET ${target}-regs
         PRE_BUILD
         COMMAND ${gen_reg_def_py} ${src_directory} ${generate_registers_SOURCES}

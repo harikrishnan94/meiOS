@@ -6,6 +6,9 @@
 
 #include "mei/types.h"
 
+#define REG(TYPE) typename TYPE::Register
+#define INTT(REG) typename REG::IntType
+
 namespace mei::registers {
 namespace dtl {
 template <usize Length>
@@ -26,7 +29,7 @@ template <typename R>
 concept register_t = requires(R)
 // clang-format on
 {
-  requires std::unsigned_integral<typename R::IntType>;
+  requires std::unsigned_integral<INTT(R)>;
   { R::Name } -> dtl::same_as<const char *>;
 };
 

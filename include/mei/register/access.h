@@ -4,11 +4,15 @@
 #include "register.h"
 
 namespace mei::registers {
+#define REG(TYPE) typename TYPE::Register
+#define INTT(REG) typename REG::IntType
+#define REG_INTT(TYPE) typename TYPE::Register::IntType
+
 namespace dtl {
 template <register_t R>
 struct any_register_value_modifier {
   using Register = R;
-  using ResultType = typename Register::IntType;
+  using ResultType = INTT(Register);
 
   auto Modify(ResultType /*v*/) -> ResultType;
 };
@@ -19,52 +23,30 @@ template <typename RVM, typename Register>
 concept register_value_modifier = register_t<Register> && requires(RVM m)
 // clang-format on
 {
-  requires std::same_as<typename RVM::Register, Register>;
-  {
-    m.Modify(std::declval<typename Register::IntType>())
-    } -> std::same_as<typename RVM::ResultType>;
+  requires std::same_as<REG(RVM), Register>;
+  { m.Modify(std::declval<INTT(Register)>()) } -> std::same_as<typename RVM::ResultType>;
 };
 
 // clang-format off
-template <typename RS, typename Register>
-concept register_storage = register_t<Register> && requires(const RS &ca, RS a)
+template <typename RS>
+concept register_storage = requires(RS &&rs)
 // clang-format on
 {
-  requires std::same_as<typename RS::Register, Register>;
-  { ca.Get() } -> std::same_as<typename Register::IntType>;
-  { a.Set(std::declval<typename Register::IntType>()) } -> std::same_as<void>;
+  requires register_t<REG(RS)>;
+  { rs.Get() } -> std::same_as<REG_INTT(RS)>;
+  { rs.Set(std::declval<REG_INTT(RS)>()) } -> std::same_as<void>;
 };
 
-// clang-format off
-template <typename RA, typename Register>
-concept register_accessor = register_t<Register> && register_storage<RA, Register> &&
-                            requires(RA a, dtl::any_register_value_modifier<Register> any)
-// clang-format on
-{
-  { a.Modify(any) } -> std::convertible_to<void>;
-  { a.ModifyNoRead(any) } -> std::convertible_to<void>;
-};
-
-template <register_t Register, register_storage<Register> RS>
-struct Accessor : public RS {
-  using RS::RS;
-
-  constexpr void Modify(register_value_modifier<Register> auto modifier) {
-    RS::Set(modifier.Modify(RS::Get()));
-  }
-
-  constexpr void ModifyNoRead(register_value_modifier<Register> auto modifier) {
-    RS::Set(modifier.Modify(0));
-  }
-};
+template <typename RS, typename R>
+concept register_storage_for = register_storage<RS> && register_t<R> && std::same_as<REG(RS), R>;
 
 template <register_t TRegister>
-class InMemoryStorage {
+class InMemoryRegister {
  public:
   using Register = TRegister;
-  using IntType = typename Register::IntType;
+  using IntType = INTT(Register);
 
-  constexpr explicit InMemoryStorage(IntType val) : m_val(val) {}
+  constexpr explicit InMemoryRegister(IntType val) : m_val(val) {}
 
   [[nodiscard]] constexpr auto Get() const -> IntType { return m_val; }
 
@@ -75,12 +57,12 @@ class InMemoryStorage {
 };
 
 template <register_t TRegister>
-class MemoryMappedStorage {
+class MemoryMappedRegister {
  public:
   using Register = TRegister;
-  using IntType = typename Register::IntType;
+  using IntType = INTT(Register);
 
-  explicit MemoryMappedStorage(IntType *val) : m_val(val) {}
+  explicit MemoryMappedRegister(IntType *val) : m_val(val) {}
 
   [[nodiscard]] auto Get() const -> IntType { return *m_val; }
 
@@ -90,21 +72,14 @@ class MemoryMappedStorage {
   volatile IntType *m_val;
 };
 
-template <register_t Register>
-using InMemoryRegister = Accessor<Register, InMemoryStorage<Register>>;
-
-template <register_t Register>
-using MemoryMappedRegister = Accessor<Register, MemoryMappedStorage<Register>>;
-
 template <register_t R>
 struct RegisterValueModification {
   using Register = R;
-  using ResultType = typename Register::IntType;
+  using ResultType = INTT(Register);
 
   RegisterValueModification() = default;
 
-  template <uint Offset, uint NumBits>
-  constexpr explicit RegisterValueModification(FieldValue<R, Offset, NumBits> val)
+  constexpr explicit RegisterValueModification(field_value auto val)
       : m_clr_mask(decltype(val)::Mask), m_update(val.ShiftedVal()) {}
 
   constexpr void Add(const RegisterValueModification &rhs) {
@@ -117,15 +92,8 @@ struct RegisterValueModification {
     m_update &= ~rhs.m_clr_mask;
   }
 
-  template <uint Offset, uint NumBits>
-  constexpr void Add(FieldValue<R, Offset, NumBits> val) {
-    Add(RegisterValueModification(val));
-  }
-
-  template <uint Offset, uint NumBits>
-  constexpr void Remove(FieldValue<R, Offset, NumBits> val) {
-    Remove(RegisterValueModification(val));
-  }
+  constexpr void Add(field_value_of<R> auto val) { Add(RegisterValueModification(val)); }
+  constexpr void Remove(field_value_of<R> auto val) { Remove(RegisterValueModification(val)); }
 
   [[nodiscard]] constexpr auto Modify(ResultType oldval) const -> ResultType {
     return (oldval & ~m_clr_mask) | m_update;
@@ -135,6 +103,9 @@ struct RegisterValueModification {
   ResultType m_clr_mask = {};
   ResultType m_update = {};
 };
+
+template <field_value FV>
+RegisterValueModification(FV) -> RegisterValueModification<REG(FV)>;
 
 template <register_t Register>
 constexpr auto operator+(const RegisterValueModification<Register> &lhs,
@@ -154,27 +125,17 @@ constexpr auto operator-(const RegisterValueModification<Register> &lhs,
   return res;
 }
 
-template <register_t Register, uint Offset, uint NumBits>
-constexpr auto operator+(const RegisterValueModification<Register> &lhs,
-                         FieldValue<Register, Offset, NumBits> rhs)
-    -> RegisterValueModification<Register> {
+template <field_value FV>
+constexpr auto operator+(const RegisterValueModification<REG(FV)> &lhs, FV rhs)
+    -> RegisterValueModification<REG(FV)> {
   auto res = lhs;
   res.Add(rhs);
   return res;
 }
 
-template <register_t Register>
-constexpr auto operator+=(RegisterValueModification<Register> &lhs,
-                          const RegisterValueModification<Register> &rhs)
-    -> RegisterValueModification<Register> & {
-  lhs.Add(rhs);
-  return lhs;
-}
-
-template <register_t Register, uint Offset, uint NumBits>
-constexpr auto operator+=(RegisterValueModification<Register> &lhs,
-                          FieldValue<Register, Offset, NumBits> rhs)
-    -> RegisterValueModification<Register> & {
+template <field_value FV>
+constexpr auto operator+=(RegisterValueModification<REG(FV)> &lhs, FV rhs)
+    -> RegisterValueModification<REG(FV)> & {
   lhs.Add(rhs);
   return lhs;
 }
@@ -187,20 +148,18 @@ constexpr auto operator-=(RegisterValueModification<Register> &lhs,
   return lhs;
 }
 
-template <register_t Register, uint Offset1, uint NumBits1, uint Offset2, uint NumBits2>
-constexpr auto operator+(FieldValue<Register, Offset1, NumBits1> lhs,
-                         FieldValue<Register, Offset2, NumBits2> rhs)
-    -> RegisterValueModification<Register> {
-  RegisterValueModification<Register> res{lhs};
+template <field_value FV1, field_value FV2>
+  requires(std::same_as<REG(FV1), REG(FV2)>)
+constexpr auto operator+(FV1 lhs, FV2 rhs) -> RegisterValueModification<REG(FV1)> {
+  RegisterValueModification<REG(FV1)> res{lhs};
   res.Add(rhs);
   return res;
 }
 
-template <register_t Register, uint Offset, uint NumBits>
-constexpr auto operator+(FieldValue<Register, Offset, NumBits> lhs,
-                         const RegisterValueModification<Register> &rhs)
-    -> RegisterValueModification<Register> {
-  RegisterValueModification<Register> res{lhs};
+template <field_value FV>
+constexpr auto operator+(FV lhs, const RegisterValueModification<REG(FV)> &rhs)
+    -> RegisterValueModification<REG(FV)> {
+  RegisterValueModification<REG(FV)> res{lhs};
   res.Add(rhs);
   return res;
 }
@@ -210,29 +169,57 @@ constexpr auto operator+(FieldValue<Register, Offset, NumBits> lhs,
 template <field F>
 static constexpr auto RM = RegisterValueModification{typename F::Value(0)};
 
+template <field F>
+constexpr auto Read(const register_storage_for<REG(F)> auto &rs) -> REG_INTT(F) {
+  return (rs.Get() & MaskFor<F>) >> F::Offset;
+}
+
+constexpr void Modify(
+    register_storage auto &rs,
+    const register_value_modifier<REG(std::decay_t<decltype(rs)>)> auto &modifier) {
+  rs.Set(modifier.Modify(rs.Get()));
+}
+
+constexpr void ModifyNoRead(
+    register_storage auto &rs,
+    const register_value_modifier<REG(std::decay_t<decltype(rs)>)> auto &modifier) {
+  rs.Set(modifier.Modify(0));
+}
+
+template <register_storage RS, register_value_modifier<REG(RS)> RVM>
+constexpr auto operator|=(RS &rs, const RVM &modifier) -> RS & {
+  Modify(rs, modifier);
+  return rs;
+}
+
+template <register_storage RS>
+class NOREAD {
+ public:
+  constexpr NOREAD(RS &rs) : m_rs(rs) {}
+
+  template <register_value_modifier<REG(RS)> RVM>
+  constexpr auto operator|=(const RVM &modifier) -> RS & {
+    ModifyNoRead(m_rs, modifier);
+    return m_rs;
+  }
+
+ private:
+  RS &m_rs;
+};
 }  // namespace mei::registers
 
-#define DEFINE_SYSTEM_REGISTER(name, TRegister, regname_str)                                     \
-  struct {                                                                                       \
-    using Register = TRegister;                                                                  \
-    using IntType = typename Register::IntType;                                                  \
-                                                                                                 \
-    [[nodiscard]] auto Get() const -> IntType {                                                  \
-      IntType res;                                                                               \
-      asm volatile("MRS %[res], " regname_str "\n" : [res] "=r"(res));                           \
-      return res;                                                                                \
-    }                                                                                            \
-                                                                                                 \
-    void Set(IntType newval) const {                                                             \
-      asm volatile("MSR " regname_str ", %[newval]\n" : : [newval] "r"(newval));                 \
-    }                                                                                            \
-                                                                                                 \
-    void Modify(::mei::registers::register_value_modifier<Register> auto modifier) const {       \
-      Set(modifier.Modify(Get()));                                                               \
-    }                                                                                            \
-                                                                                                 \
-    void ModifyNoRead(::mei::registers::register_value_modifier<Register> auto modifier) const { \
-      Set(modifier.Modify(0));                                                                   \
-    }                                                                                            \
-                                                                                                 \
+#define DEFINE_SYSTEM_REGISTER(name, TRegister, regname_str)                     \
+  struct Storage {                                                               \
+    using Register = TRegister;                                                  \
+    using IntType = INTT(Register);                                              \
+                                                                                 \
+    [[nodiscard]] auto Get() const -> IntType {                                  \
+      IntType res;                                                               \
+      asm volatile("MRS %[res], " regname_str "\n" : [res] "=r"(res));           \
+      return res;                                                                \
+    }                                                                            \
+                                                                                 \
+    void Set(IntType newval) const {                                             \
+      asm volatile("MSR " regname_str ", %[newval]\n" : : [newval] "r"(newval)); \
+    }                                                                            \
   } inline const name

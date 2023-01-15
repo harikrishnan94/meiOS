@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <random>
 
+#include "generated/exception.h"
 #include "generated/mmu.h"
 #include "mei/expected.h"
 #include "mei/fmt/format.h"
@@ -202,11 +203,11 @@ constexpr auto get_val() -> mei::expected<mei::u64, error> {
   PageDesc desc{0};
   desc.Set(100);
 
-  desc.Modify(STAGE1_PAGE_DESCRIPTOR::OUTPUT_ADDR_4KiB::Value(0xFFFF) +
-              STAGE1_PAGE_DESCRIPTOR::PXN::True - RM<STAGE1_PAGE_DESCRIPTOR::OUTPUT_ADDR_4KiB> -
-              RM<STAGE1_PAGE_DESCRIPTOR::PXN>);
+  desc |= STAGE1_PAGE_DESCRIPTOR::OUTPUT_ADDR_4KiB::Value(0xFFFF) +
+          STAGE1_PAGE_DESCRIPTOR::PXN::True - RM<STAGE1_PAGE_DESCRIPTOR::PXN>;
 
-  return desc.Get();
+  return Read<STAGE1_PAGE_DESCRIPTOR::OUTPUT_ADDR_4KiB>(desc) |
+         MaskFor<STAGE1_PAGE_DESCRIPTOR::PXN>;
 }
 
 constinit const auto Val = get_val();
@@ -225,5 +226,9 @@ static auto div_if_even(int a, int b) -> tl::expected<int, error> {
 extern "C" void MEI_MAIN() {
   uart_init(3);
 
+  const auto &CurrentEL = mei::registers::exception::CurrentEL::CurrentEL;
+  using CurrentELReg = exception::CurrentEL::Register;
+
+  puts("We're at EL{}\n", Read<CurrentELReg::EL>(CurrentEL));
   puts("After set = 0x{:X}\n", Val.value());
 }

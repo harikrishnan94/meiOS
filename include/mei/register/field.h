@@ -12,34 +12,48 @@ template <typename F>
 concept field = requires(F)
 // clang-format on
 {
-  requires register_t<typename F::Register>;
+  requires register_t<REG(F)>;
   { F::Name } -> dtl::same_as<const char *>;
   { F::Offset } -> dtl::same_as<uint>;
   { F::NumBits } -> dtl::same_as<uint>;
 };
 
-template <field Field1, typename... OtherFields>
-static constexpr auto all_belong_to_same_register_v =
-    ((field<OtherFields> && ...) &&
-     (std::same_as<typename Field1::RegisterType, typename OtherFields::RegisterType> && ...));
+template <typename F, typename R>
+concept field_of = register_t<R> && field<F> && requires(F) { requires std::same_as<R, REG(F)>; };
 
-template <typename... Field>
-  requires(field<Field> && ...)
-constexpr auto CreateMaskOverlapping() {
-  return ((bits::CreateMask<typename Field::RegisterType::IntType>(Field::NumBits, Field::Offset)) |
-          ...);
-}
+template <register_t R, field_of<R> Field1, typename... OtherFields>
+static constexpr auto AreFieldsBelongToSameRegister =
+    ((field_of<R, OtherFields> && ...) &&
+     (std::same_as<typename Field1::Register, typename OtherFields::Register> && ...));
 
-template <typename... Field>
-  requires(all_belong_to_same_register_v<Field...>)
-static constexpr bool are_non_overlapping_v = bits::Count(CreateMaskOverlapping<Field...>()) ==
-                                              (Field::NumBits + ...);
+template <register_t R, typename... Field>
+  requires(field_of<Field, R> && ...)
+static constexpr auto OverlappingMaskFor =
+    ((bits::CreateMask<typename Field::Register::IntType>(Field::NumBits, Field::Offset)) | ...);
 
-template <typename... Field>
-  requires are_non_overlapping_v<Field...>
-constexpr auto CreateMask() {
-  return CreateMaskOverlapping<Field...>();
-}
+template <register_t R, typename... Field>
+  requires(AreFieldsBelongToSameRegister<R, Field...>)
+static constexpr bool AreFieldsNonOverlapping = bits::Count(OverlappingMaskFor<R, Field...>) ==
+                                                (Field::NumBits + ...);
+
+template <field FirstField, typename... Field>
+  requires AreFieldsNonOverlapping<typename FirstField::Register, FirstField, Field...>
+static constexpr auto MaskFor =
+    OverlappingMaskFor<typename FirstField::Register, FirstField, Field...>;
+
+// clang-format off
+template <typename FV>
+concept field_value = requires(FV v)
+// clang-format on
+{
+  requires register_t<REG(FV)>;
+  { FV::Mask } -> dtl::same_as<REG(FV)::IntType>;
+  { v.Val() } -> dtl::same_as<REG(FV)::IntType>;
+  { v.ShiftedVal() } -> dtl::same_as<REG(FV)::IntType>;
+};
+
+template <typename FV, typename R>
+concept field_value_of = register_t<R> && field_value<FV> && std::same_as<REG(FV), R>;
 
 template <register_t R, uint Offset, uint NumBits>
 class FieldValue {
@@ -66,7 +80,7 @@ class FieldValue {
 };
 
 template <dtl::fixed_string TName, register_t TRegister, uint TOffset, uint TNumBits>
-  requires((TOffset + TNumBits) <= bits::Count<typename TRegister::IntType>(-1))
+  requires((TOffset + TNumBits) <= bits::Count<INTT(TRegister)>(-1))
 struct Field {
   using Register = TRegister;
   static constexpr const char *Name = TName.data();
