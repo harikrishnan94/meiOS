@@ -209,7 +209,7 @@ template <typename E>
   __assume(0);
 #else
   assert(false && "tl::throw_exception");
-  __builtin_unreachable();
+  abort();
 #endif
 #endif
 }
