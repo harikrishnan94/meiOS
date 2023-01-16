@@ -9,7 +9,7 @@
 //!     - Supports splitting/merging adjacent mappings.
 //!     - This is loaded into TTBR0 and is used in Un-privileged (User) mode.
 
-use core::{alloc::Layout, cmp::min, mem::size_of};
+use core::{alloc::Layout, cell::UnsafeCell, cmp::min, mem::size_of};
 
 use tock_registers::{
     interfaces::{ReadWriteable, Readable},
@@ -50,11 +50,13 @@ type Stage1BlockDescriptor = InMemoryRegister<u64, STAGE1_BLOCK_DESCRIPTOR::Regi
 #[derive(Debug)]
 #[repr(C)]
 #[repr(align(4096))]
-struct DescriptorTable([u64; NUM_TABLE_DESC_ENTRIES]);
+struct DescriptorTable(UnsafeCell<[u64; NUM_TABLE_DESC_ENTRIES]>);
 
 impl Default for DescriptorTable {
     fn default() -> Self {
-        Self([INVALID_DESCRIPTOR; NUM_TABLE_DESC_ENTRIES])
+        Self(UnsafeCell::new(
+            [INVALID_DESCRIPTOR; NUM_TABLE_DESC_ENTRIES],
+        ))
     }
 }
 
@@ -85,7 +87,7 @@ impl TranslationTable {
         maps: &[MemoryMap],
         desc_alloc: &DescAlloc,
     ) -> Result<Self> {
-        let mut tt = Self {
+        let tt = Self {
             root: DescriptorTable::default(),
         };
 
@@ -98,7 +100,7 @@ impl TranslationTable {
 
     /// Add Mapping to translation table
     pub fn map<DescAlloc: PhysicalPageAllocator>(
-        &mut self,
+        &self,
         map: &MemoryMap,
         desc_alloc: &DescAlloc,
     ) -> Result<()> {
@@ -114,7 +116,7 @@ impl TranslationTable {
 
         for level in TRANSLATION_LEVELS {
             let idx = vaddr.get_idx_for_level(level);
-            let desc = descs.0[idx];
+            let desc = load_desc(descs, idx);
 
             // #[cfg(test)]
             // print!(
@@ -127,8 +129,7 @@ impl TranslationTable {
                     // #[cfg(test)]
                     // print!("Found TBL Desc: 0x{:X}...", tbl_desc.get());
                     assert_ne!(level, &AddressTranslationLevel::Three);
-                    let next_lvl_desc = read_next_level_desc(&tbl_desc);
-                    descs = unsafe { &*(next_lvl_desc as *mut DescriptorTable) };
+                    descend_tbl_desc(tbl_desc, &mut descs);
                 }
                 Descriptor::Block(block_desc) => {
                     let create_translation_desc = |phy_addr: usize| {
@@ -208,11 +209,11 @@ impl TranslationTable {
     }
 
     pub fn get_base_address(&self) -> u64 {
-        self.root.0.as_ptr() as u64
+        self.root.0.get() as u64
     }
 
     fn map_impl<DescAlloc: PhysicalPageAllocator>(
-        &mut self,
+        &self,
         map: &ParsedMemoryMap,
         desc_alloc: &DescAlloc,
         mmap: &MemoryMap,
@@ -272,16 +273,16 @@ impl TranslationTable {
     }
 
     fn install_page_descs<DescAlloc: PhysicalPageAllocator>(
-        &mut self,
+        &self,
         map: &mut ParsedMemoryMap,
         desc_alloc: &DescAlloc,
         mmap: &MemoryMap,
     ) -> Result<()> {
-        let mut descs = &mut self.root;
+        let mut descs = &self.root;
 
         for level in TRANSLATION_LEVELS {
             let idx = map.virt_addr.get_idx_for_level(level);
-            let desc = descs.0[idx];
+            let desc = load_desc(descs, idx);
 
             // #[cfg(test)]
             // print!(
@@ -310,7 +311,8 @@ impl TranslationTable {
                         AddressTranslationLevel::Zero
                         | AddressTranslationLevel::One
                         | AddressTranslationLevel::Two => {
-                            let tbl_desc = install_new_tbl_desc(desc_alloc, &mut descs.0[idx])?;
+                            let tbl_desc =
+                                install_new_tbl_desc(desc_alloc, load_desc_mut(descs, idx))?;
                             descend_tbl_desc(tbl_desc, &mut descs);
                         }
                         AddressTranslationLevel::Three => {
@@ -336,16 +338,16 @@ impl TranslationTable {
     }
 
     fn install_l2_block_desc<DescAlloc: PhysicalPageAllocator>(
-        &mut self,
+        &self,
         map: &mut ParsedMemoryMap,
         desc_alloc: &DescAlloc,
         mmap: &MemoryMap,
     ) -> Result<()> {
-        let mut descs = &mut self.root;
+        let mut descs = &self.root;
 
         for level in TRANSLATION_LEVELS {
             let idx = map.virt_addr.get_idx_for_level(level);
-            let desc = descs.0[idx];
+            let desc = load_desc(descs, idx);
 
             // #[cfg(test)]
             // print!(
@@ -377,7 +379,8 @@ impl TranslationTable {
                     // Until we reach level 2, insert Table Descriptors.
                     match level {
                         AddressTranslationLevel::Zero | AddressTranslationLevel::One => {
-                            let tbl_desc = install_new_tbl_desc(desc_alloc, &mut descs.0[idx])?;
+                            let tbl_desc =
+                                install_new_tbl_desc(desc_alloc, load_desc_mut(descs, idx))?;
                             descend_tbl_desc(tbl_desc, &mut descs);
                         }
                         AddressTranslationLevel::Two => {
@@ -410,16 +413,16 @@ impl TranslationTable {
     }
 
     fn install_l1_block_desc<DescAlloc: PhysicalPageAllocator>(
-        &mut self,
+        &self,
         map: &mut ParsedMemoryMap,
         desc_alloc: &DescAlloc,
         mmap: &MemoryMap,
     ) -> Result<()> {
-        let mut descs = &mut self.root;
+        let mut descs = &self.root;
 
         for level in TRANSLATION_LEVELS {
             let idx = map.virt_addr.get_idx_for_level(level);
-            let desc = descs.0[idx];
+            let desc = load_desc(descs, idx);
 
             // #[cfg(test)]
             // print!(
@@ -457,7 +460,8 @@ impl TranslationTable {
                     // Until we reach level 1, insert Table Descriptors.
                     match level {
                         AddressTranslationLevel::Zero => {
-                            let tbl_desc = install_new_tbl_desc(desc_alloc, &mut descs.0[idx])?;
+                            let tbl_desc =
+                                install_new_tbl_desc(desc_alloc, load_desc_mut(descs, idx))?;
                             descend_tbl_desc(tbl_desc, &mut descs);
                         }
                         AddressTranslationLevel::One => {
@@ -494,7 +498,7 @@ fn read_next_level_desc(tbl_desc: &Stage1TableDescriptor) -> u64 {
     tbl_desc.read(STAGE1_TABLE_DESCRIPTOR::NEXT_LEVEL_TABLE_ADDR) << NEXT_LEVEL_TABLE_ADDR_SHIFT
 }
 
-fn descend_tbl_desc(tbl_desc: Stage1TableDescriptor, descs: &mut &mut DescriptorTable) {
+fn descend_tbl_desc(tbl_desc: Stage1TableDescriptor, descs: &mut &DescriptorTable) {
     let next_lvl_desc = read_next_level_desc(&tbl_desc);
     assert_ne!(next_lvl_desc, 0);
     // #[cfg(test)]
@@ -529,16 +533,16 @@ fn install_new_tbl_desc<DescAlloc: PhysicalPageAllocator>(
 fn install_contigious_mappings<F: Fn(u64, u64) -> u64>(
     map: &mut ParsedMemoryMap,
     idx: usize,
-    descs: &mut DescriptorTable,
+    descs: &DescriptorTable,
     page_size: usize,
     new_stage1_descriptor: &F,
 ) {
     let mut paddr = map.phy_addr.as_raw_ptr() as u64;
     let num_mapped_pages = core::cmp::min(map.num_pages, NUM_TABLE_DESC_ENTRIES - idx);
     for i in 0..num_mapped_pages {
-        assert_eq!(descs.0[idx + i], INVALID_DESCRIPTOR);
+        assert_eq!(load_desc(descs, idx + i), INVALID_DESCRIPTOR);
         let desc = new_stage1_descriptor(paddr, map.attributes);
-        descs.0[idx + i] = desc;
+        *load_desc_mut(descs, idx + i) = desc;
         paddr += page_size as u64;
     }
     map.phy_addr += num_mapped_pages * page_size;
@@ -863,6 +867,14 @@ fn new_stage1_block_desc(level: BlockDescLevel, output_address: u64, attributes:
     }
 
     block_desc.get()
+}
+
+fn load_desc(descs: &DescriptorTable, idx: usize) -> u64 {
+    unsafe { (*descs.0.get())[idx] }
+}
+
+fn load_desc_mut(descs: &DescriptorTable, idx: usize) -> &mut u64 {
+    unsafe { &mut (*descs.0.get())[idx] }
 }
 
 #[cfg(all(test, not(feature = "no_std")))]
