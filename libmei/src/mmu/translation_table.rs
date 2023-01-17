@@ -26,8 +26,8 @@ use crate::{
 
 use super::{
     GRANULE_SIZE, LEVEL_1_OUTPUT_ADDR_SHIFT, LEVEL_2_OUTPUT_ADDR_SHIFT, LEVEL_3_OUTPUT_ADDR_SHIFT,
-    STAGE1_BLOCK_DESCRIPTOR, STAGE1_PAGE_DESCRIPTOR, STAGE1_TABLE_DESCRIPTOR,
-    TRANSLATION_TABLE_DESC_ALIGN,
+    STAGE1_BLOCK_DESCRIPTOR, STAGE1_LAST_LEVEL_DESCRIPTOR, STAGE1_PAGE_DESCRIPTOR,
+    STAGE1_TABLE_DESCRIPTOR, TRANSLATION_TABLE_DESC_ALIGN,
 };
 
 const NUM_TABLE_DESC_ENTRIES: usize = 512;
@@ -42,6 +42,7 @@ const ONE_GIB: usize = 1024 * 1024 * 1024;
 const TWO_MIB: usize = 2 * 1024 * 1024;
 const FOUR_KIB: usize = 4 * 1024;
 
+type Stage1LastLevelDescriptor = InMemoryRegister<u64, STAGE1_LAST_LEVEL_DESCRIPTOR::Register>;
 type Stage1PageDescriptor = InMemoryRegister<u64, STAGE1_PAGE_DESCRIPTOR::Register>;
 type Stage1TableDescriptor = InMemoryRegister<u64, STAGE1_TABLE_DESCRIPTOR::Register>;
 type Stage1BlockDescriptor = InMemoryRegister<u64, STAGE1_BLOCK_DESCRIPTOR::Register>;
@@ -114,7 +115,7 @@ impl TranslationTable {
         // print!("Translating vaddr {vaddr}...");
         let mut descs = &self.root;
 
-        for level in TRANSLATION_LEVELS {
+        for level in TRANSLATION_LEVELS.iter() {
             let idx = vaddr.get_idx_for_level(level);
             let desc = load_desc(descs, idx);
 
@@ -124,6 +125,23 @@ impl TranslationTable {
             //     descs.0.as_ptr() as u64
             // );
 
+            let to_translation_desc = |desc: u64| {
+                let ll_desc = Stage1LastLevelDescriptor::new(desc);
+                let is_cacheable =
+                    !ll_desc.matches_all(STAGE1_LAST_LEVEL_DESCRIPTOR::SH::OuterShareable);
+
+                Some(TranslationDesc {
+                    virt_addr: vaddr,
+                    phy_addr: parse_output_address(&ll_desc, level),
+                    access_perms: parse_access_perms(&ll_desc),
+                    memory_kind: if is_cacheable {
+                        MemoryKind::Normal
+                    } else {
+                        MemoryKind::Device
+                    },
+                })
+            };
+
             match parse_desc(desc, level).ok()? {
                 Descriptor::Table(tbl_desc) => {
                     // #[cfg(test)]
@@ -131,70 +149,8 @@ impl TranslationTable {
                     assert_ne!(level, &AddressTranslationLevel::Three);
                     descend_tbl_desc(tbl_desc, &mut descs);
                 }
-                Descriptor::Block(block_desc) => {
-                    let create_translation_desc = |phy_addr: usize| {
-                        let is_cacheable =
-                            !block_desc.matches_all(STAGE1_BLOCK_DESCRIPTOR::SH::OuterShareable);
-
-                        TranslationDesc {
-                            virt_addr: vaddr,
-                            phy_addr: PhysicalAddress::new(phy_addr),
-                            access_perms: parse_access_perms_bd(&block_desc),
-                            memory_kind: if is_cacheable {
-                                MemoryKind::Normal
-                            } else {
-                                MemoryKind::Device
-                            },
-                        }
-                    };
-
-                    let output_address;
-                    let page_offset;
-                    let phy_addr;
-
-                    match BlockDescLevel::from(level) {
-                        BlockDescLevel::One => {
-                            // #[cfg(test)]
-                            // print!("Found L1 Block Desc: 0x{:X}...", block_desc.get());
-                            output_address =
-                                block_desc.read(STAGE1_BLOCK_DESCRIPTOR::OUTPUT_ADDR_1GiB) as usize;
-                            page_offset = vaddr.get_page_offset_1GiB();
-                            phy_addr = (output_address << LEVEL_1_OUTPUT_ADDR_SHIFT) | page_offset;
-                        }
-                        BlockDescLevel::Two => {
-                            // #[cfg(test)]
-                            // print!("Found L2 Block Desc: 0x{:X}...", block_desc.get());
-                            output_address =
-                                block_desc.read(STAGE1_BLOCK_DESCRIPTOR::OUTPUT_ADDR_2MiB) as usize;
-                            page_offset = vaddr.get_page_offset_2MiB();
-                            phy_addr = (output_address << LEVEL_2_OUTPUT_ADDR_SHIFT) | page_offset;
-                        }
-                    }
-
-                    return Some(create_translation_desc(phy_addr));
-                }
-                Descriptor::Page(page_desc) => {
-                    // #[cfg(test)]
-                    // print!("Found Page Desc: 0x{:X}...", page_desc.get());
-
-                    let output_address =
-                        page_desc.read(STAGE1_PAGE_DESCRIPTOR::OUTPUT_ADDR_4KiB) as usize;
-                    let page_offset = vaddr.get_page_offset_4KiB();
-                    let phy_addr = (output_address << LEVEL_3_OUTPUT_ADDR_SHIFT) | page_offset;
-                    let is_cacheable =
-                        !page_desc.matches_all(STAGE1_PAGE_DESCRIPTOR::SH::OuterShareable);
-
-                    return Some(TranslationDesc {
-                        virt_addr: vaddr,
-                        phy_addr: PhysicalAddress::new(phy_addr),
-                        access_perms: parse_access_perms_pd(&page_desc),
-                        memory_kind: if is_cacheable {
-                            MemoryKind::Normal
-                        } else {
-                            MemoryKind::Device
-                        },
-                    });
-                }
+                Descriptor::Block(block_desc) => return to_translation_desc(block_desc.get()),
+                Descriptor::Page(page_desc) => return to_translation_desc(page_desc.get()),
                 Descriptor::Invalid => {
                     // #[cfg(test)]
                     // print!("Found Invalid Desc: 0x{desc:X}...");
@@ -494,10 +450,6 @@ impl TranslationTable {
     }
 }
 
-fn read_next_level_desc(tbl_desc: &Stage1TableDescriptor) -> u64 {
-    tbl_desc.read(STAGE1_TABLE_DESCRIPTOR::NEXT_LEVEL_TABLE_ADDR) << NEXT_LEVEL_TABLE_ADDR_SHIFT
-}
-
 fn get_next_level_desc<'tt>(tbl_desc: &Stage1TableDescriptor) -> &'tt DescriptorTable {
     let next_lvl_desc = read_next_level_desc(&tbl_desc);
     assert_ne!(next_lvl_desc, 0);
@@ -755,55 +707,72 @@ fn to_raw_desc(value: u64) -> RawDescriptor {
     RawDescriptor::Invalid
 }
 
-fn parse_access_perms_bd(block_desc: &Stage1BlockDescriptor) -> AccessPermissions {
-    let mut access_perms = parse_access_perms(block_desc.read(STAGE1_BLOCK_DESCRIPTOR::AP));
-
-    if !block_desc.is_set(STAGE1_BLOCK_DESCRIPTOR::PXN)
-        && !access_perms.contains(AccessPermissions::EL1_WRITE)
-    {
-        access_perms |= AccessPermissions::EL1_EXECUTE;
+fn parse_output_address(
+    ll_desc: &Stage1LastLevelDescriptor,
+    level: &AddressTranslationLevel,
+) -> PhysicalAddress {
+    match level {
+        AddressTranslationLevel::Zero => bug!("unexpected level for parse_output_address"),
+        AddressTranslationLevel::One => {
+            assert!(!ll_desc.is_set(STAGE1_LAST_LEVEL_DESCRIPTOR::TYPE));
+            // #[cfg(test)]
+            // print!("Found L1 Block Desc: 0x{:X}...", ll_desc.get());
+            PhysicalAddress::new(
+                (ll_desc.read(STAGE1_LAST_LEVEL_DESCRIPTOR::OUTPUT_ADDR_1GiB)
+                    << LEVEL_1_OUTPUT_ADDR_SHIFT) as usize,
+            )
+        }
+        AddressTranslationLevel::Two => {
+            assert!(!ll_desc.is_set(STAGE1_LAST_LEVEL_DESCRIPTOR::TYPE));
+            // #[cfg(test)]
+            // print!("Found L2 Block Desc: 0x{:X}...", ll_desc.get());
+            PhysicalAddress::new(
+                (ll_desc.read(STAGE1_LAST_LEVEL_DESCRIPTOR::OUTPUT_ADDR_2MiB)
+                    << LEVEL_2_OUTPUT_ADDR_SHIFT) as usize,
+            )
+        }
+        AddressTranslationLevel::Three => {
+            assert!(ll_desc.is_set(STAGE1_LAST_LEVEL_DESCRIPTOR::TYPE));
+            // #[cfg(test)]
+            // print!("Found Page Desc: 0x{:X}...", ll_desc.get());
+            PhysicalAddress::new(
+                (ll_desc.read(STAGE1_LAST_LEVEL_DESCRIPTOR::OUTPUT_ADDR_4KiB)
+                    << LEVEL_3_OUTPUT_ADDR_SHIFT) as usize,
+            )
+        }
     }
-    if !block_desc.is_set(STAGE1_BLOCK_DESCRIPTOR::UXN)
-        && !access_perms.contains(AccessPermissions::EL0_WRITE)
-    {
-        access_perms |= AccessPermissions::EL0_EXECUTE;
-    }
-
-    access_perms
 }
 
-fn parse_access_perms_pd(page_desc: &Stage1PageDescriptor) -> AccessPermissions {
-    let mut access_perms = parse_access_perms(page_desc.read(STAGE1_PAGE_DESCRIPTOR::AP));
+fn parse_access_perms(ll_desc: &Stage1LastLevelDescriptor) -> AccessPermissions {
+    let ap = ll_desc.read(STAGE1_LAST_LEVEL_DESCRIPTOR::AP);
 
-    if !page_desc.is_set(STAGE1_PAGE_DESCRIPTOR::PXN)
-        && !access_perms.contains(AccessPermissions::EL1_WRITE)
-    {
-        access_perms |= AccessPermissions::EL1_EXECUTE;
-    }
-    if !page_desc.is_set(STAGE1_PAGE_DESCRIPTOR::UXN)
-        && !access_perms.contains(AccessPermissions::EL0_WRITE)
-    {
-        access_perms |= AccessPermissions::EL0_EXECUTE;
-    }
-
-    access_perms
-}
-
-fn parse_access_perms(ap: u64) -> AccessPermissions {
-    if ap == STAGE1_PAGE_DESCRIPTOR::AP::RW_EL1_EL0.value {
+    let mut access_perms = if ap == STAGE1_LAST_LEVEL_DESCRIPTOR::AP::RW_EL1_EL0.value {
         AccessPermissions::EL1_READ
             | AccessPermissions::EL1_WRITE
             | AccessPermissions::EL0_READ
             | AccessPermissions::EL0_WRITE
-    } else if ap == STAGE1_PAGE_DESCRIPTOR::AP::RW_EL1.value {
+    } else if ap == STAGE1_LAST_LEVEL_DESCRIPTOR::AP::RW_EL1.value {
         AccessPermissions::EL1_READ | AccessPermissions::EL1_WRITE
-    } else if ap == STAGE1_PAGE_DESCRIPTOR::AP::RO_EL1_EL0.value {
+    } else if ap == STAGE1_LAST_LEVEL_DESCRIPTOR::AP::RO_EL1_EL0.value {
         AccessPermissions::EL1_READ | AccessPermissions::EL0_READ
-    } else if ap == STAGE1_PAGE_DESCRIPTOR::AP::RO_EL1.value {
+    } else if ap == STAGE1_LAST_LEVEL_DESCRIPTOR::AP::RO_EL1.value {
         AccessPermissions::EL1_READ
     } else {
         bug!("Invalid Access Permissions on page");
+    };
+
+    if !ll_desc.is_set(STAGE1_LAST_LEVEL_DESCRIPTOR::PXN)
+        && !access_perms.contains(AccessPermissions::EL1_WRITE)
+    {
+        access_perms |= AccessPermissions::EL1_EXECUTE;
     }
+    if !ll_desc.is_set(STAGE1_LAST_LEVEL_DESCRIPTOR::UXN)
+        && !access_perms.contains(AccessPermissions::EL0_WRITE)
+    {
+        access_perms |= AccessPermissions::EL0_EXECUTE;
+    }
+
+    access_perms
 }
 
 fn new_stage1_table_desc(next_level_addr: u64) -> u64 {

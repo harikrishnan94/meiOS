@@ -221,5 +221,63 @@ register_bitfields! {u64,
             False = 0,
             True = 1
         ]
+    ],
+
+    // A level 1/2 block or level 3 page descriptor.
+    STAGE1_LAST_LEVEL_DESCRIPTOR [
+        /// Bits for Software Use
+        SWUSE OFFSET(55) NUMBITS(4) [],
+
+        /// Unprivileged execute-never.
+        UXN OFFSET(54) NUMBITS(1) [
+            False = 0,
+            True = 1
+        ],
+
+        /// Privileged execute-never.
+        PXN OFFSET(53) NUMBITS(1) [
+            False = 0,
+            True = 1
+        ],
+
+        /// Bits [47:12] of Output Address. Points to a 4KiB Physical Page. (Level 3)
+        OUTPUT_ADDR_4KiB OFFSET(12) NUMBITS(36) [], // [47:12]
+        /// Bits [47:21] of Output Address. Points to a 2MiB Physical Page. (Level 2)
+        OUTPUT_ADDR_2MiB OFFSET(21) NUMBITS(27) [], // [47:21]
+        /// Bits [47:30] of Output Address. Points to a 1GiB Physical Page. (Level 1)
+        OUTPUT_ADDR_1GiB OFFSET(30) NUMBITS(18) [], // [47:30]
+
+        /// Access flag.
+        AF OFFSET(10) NUMBITS(1) [
+            False = 0,
+            True = 1
+        ],
+
+        /// Shareability field.
+        SH OFFSET(8) NUMBITS(2) [
+            OuterShareable = 0b10,
+            InnerShareable = 0b11
+        ],
+
+        /// Access Permissions.
+        AP OFFSET(6) NUMBITS(2) [
+            RW_EL1 = 0b00,
+            RW_EL1_EL0 = 0b01,
+            RO_EL1 = 0b10,
+            RO_EL1_EL0 = 0b11
+        ],
+
+        /// Memory attributes index into the MAIR_EL1 register.
+        AttrIndx OFFSET(2) NUMBITS(3) [],
+
+        TYPE OFFSET(1) NUMBITS(1) [
+            Block = 0,
+            Page = 1
+        ],
+
+        VALID OFFSET(0) NUMBITS(1) [
+            False = 0,
+            True = 1
+        ]
     ]
 }
