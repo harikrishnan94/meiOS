@@ -498,12 +498,20 @@ fn read_next_level_desc(tbl_desc: &Stage1TableDescriptor) -> u64 {
     tbl_desc.read(STAGE1_TABLE_DESCRIPTOR::NEXT_LEVEL_TABLE_ADDR) << NEXT_LEVEL_TABLE_ADDR_SHIFT
 }
 
-fn descend_tbl_desc(tbl_desc: Stage1TableDescriptor, descs: &mut &DescriptorTable) {
+fn get_next_level_desc<'tt>(tbl_desc: &Stage1TableDescriptor) -> &'tt DescriptorTable {
     let next_lvl_desc = read_next_level_desc(&tbl_desc);
     assert_ne!(next_lvl_desc, 0);
     // #[cfg(test)]
     // print!("descending to 0x{next_lvl_desc:X}...");
-    *descs = unsafe { &mut *(next_lvl_desc as *mut DescriptorTable) };
+    unsafe { &*(next_lvl_desc as *mut DescriptorTable) }
+}
+
+fn read_next_level_desc(tbl_desc: &Stage1TableDescriptor) -> u64 {
+    tbl_desc.read(STAGE1_TABLE_DESCRIPTOR::NEXT_LEVEL_TABLE_ADDR) << NEXT_LEVEL_TABLE_ADDR_SHIFT
+}
+
+fn descend_tbl_desc(tbl_desc: Stage1TableDescriptor, descs: &mut &DescriptorTable) {
+    *descs = get_next_level_desc(&tbl_desc);
 }
 
 fn install_new_tbl_desc<DescAlloc: PhysicalPageAllocator>(
