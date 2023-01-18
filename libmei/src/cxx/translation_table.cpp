@@ -183,7 +183,12 @@ static auto Traverse(std::allocator_arg_t,
   free_empty_descs(root, ctx);
 }
 
+#if USE_THREAD_LOCAL 1
+static THREAD_LOCAL DefaultStackAllocator coro_alloc;
+#else
 static DefaultStackAllocator coro_alloc;
+#endif
+
 
 void BeginTraversal(TraverseContext &ctx) {
   coro_alloc.used = 0;

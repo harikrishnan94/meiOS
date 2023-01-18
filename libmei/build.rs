@@ -7,11 +7,16 @@ use walkdir::WalkDir;
 
 fn main() -> Result<()> {
     let ttt_rs = "src/mmu/translation_table.rs";
-    let ttt_cxx = "src/cxx/src/translation_table.cpp";
+    let ttt_cxx = "src/cxx/translation_table.cpp";
     let out_dir = env::var("OUT_DIR").unwrap();
 
     let mut cxx = cxx_build::bridge(ttt_rs);
-    choose_compiler(&mut cxx, target_is_host().unwrap_or(true))?;
+    let is_host = target_is_host().unwrap_or(true);
+
+    choose_compiler(&mut cxx, is_host)?;
+    if is_host {
+        cxx.define("USE_THREAD_LOCAL", "1");
+    }
 
     cxx.file(ttt_cxx)
         .include(&out_dir)

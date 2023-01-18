@@ -1016,7 +1016,7 @@ mod ffi {
     }
 
     unsafe extern "C++" {
-        include!("libmei/src/cxx/src/translation_table.h");
+        include!("libmei/src/cxx/translation_table.h");
 
         fn BeginTraversal(ctx: &mut TraverseContext);
         fn NextItem(ctx: &mut TraverseContext) -> VMMap;
