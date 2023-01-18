@@ -26,3 +26,9 @@ rayon = "1.6.1"
 
 [build-dependencies]
 cxx-build = "1.0"
+cc = "*"
+anyhow = "*"
+walkdir = "*"
+
+[patch.crates-io]
+link-cplusplus = { path = "../link-cplusplus" }

@@ -479,7 +479,7 @@ pub struct PhysicalBlockOverlapInfo {
 
 impl PhysicalBlockOverlapInfo {
     fn new(ctx: &ffi::TraverseContext, map: &ffi::VMMap) -> Option<Self> {
-        if ctx.has_error {
+        if ctx.has_error || ctx.done {
             return None;
         }
 
@@ -503,6 +503,10 @@ impl PhysicalBlockOverlapInfo {
         self.phy_block..self.phy_block + self.size as usize
     }
 
+    pub fn size(&self) -> usize {
+        self.size as usize
+    }
+
     pub fn overlapping_range(&self) -> &Range<u32> {
         &self.overlap
     }
@@ -524,7 +528,7 @@ impl Iterator for TraverseIterator {
     type Item = PhysicalBlockOverlapInfo;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if !self.ctx.done {
+        if self.ctx.done {
             return None;
         }
 
@@ -555,7 +559,7 @@ impl TraverseIterator {
                 done: false,
                 num_empty_descs: 0,
                 empty_descs: Default::default(),
-                traverse_stack: [0; 256],
+                gen_ptr: 0,
             },
         };
         ffi::BeginTraversal(&mut iter.ctx);
@@ -974,6 +978,10 @@ fn load_desc_mut(descs: &DescriptorTable, idx: usize) -> &mut u64 {
     unsafe { &mut (*descs.0.get())[idx] }
 }
 
+fn terminate() {
+    bug!("{}", "c++ bug");
+}
+
 #[cxx::bridge(namespace = "mei::mmu::tt")]
 mod ffi {
     #[derive(Debug, Copy, Clone)]
@@ -1004,15 +1012,19 @@ mod ffi {
         done: bool,
         num_empty_descs: u32,
         empty_descs: [u64; 4],
-        traverse_stack: [u8; 256],
+        gen_ptr: usize,
     }
 
     unsafe extern "C++" {
-        include!("libmei/src/mmu/translation_table.h");
+        include!("libmei/src/cxx/src/translation_table.h");
 
         fn BeginTraversal(ctx: &mut TraverseContext);
         fn NextItem(ctx: &mut TraverseContext) -> VMMap;
         fn EndTraversal(ctx: &mut TraverseContext);
+    }
+
+    extern "Rust" {
+        fn terminate();
     }
 }
 
@@ -1155,7 +1167,7 @@ mod tests {
             virt_addr += ONE_GIB;
         }
 
-        memory_maps.shuffle(&mut thread_rng());
+        // memory_maps.shuffle(&mut thread_rng());
         memory_maps
     }
 
@@ -1271,11 +1283,17 @@ mod tests {
             match map {
                 MemoryMap::Normal(desc) => {
                     let vaddr = desc.virtual_address();
+                    let paddr = desc.physical_address();
+                    let mut size = 0;
+
                     for pbo_info in translation_table
                         .traverse(vaddr..vaddr + desc.num_pages() * FOUR_KIB, false)
                     {
-                        assert_eq!(pbo_info.phy_block().start, desc.physical_address());
+                        assert_eq!(pbo_info.phy_block().start, paddr + size);
+                        size += pbo_info.size();
                     }
+
+                    assert_eq!(size, desc.num_pages() * FOUR_KIB);
                 }
                 MemoryMap::Device(_) => assert!(false, "Failure"),
             }

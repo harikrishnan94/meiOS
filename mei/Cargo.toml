@@ -22,3 +22,6 @@ cargo-binutils = "0.3.6"
 strip = true    # Automatically strip symbols from the binary.
 opt-level = "z" # Optimize for size.
 lto = true
+
+[patch.crates-io]
+link-cplusplus = { path = "../link-cplusplus" }

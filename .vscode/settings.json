@@ -1,3 +1,4 @@
 {
     "rust-analyzer.checkOnSave.allTargets": false,
+    "cmake.sourceDirectory": "${workspaceFolder}/libmei/src/cxx",
 }

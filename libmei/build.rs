@@ -1,18 +1,58 @@
-fn main() {
-    let ttt_rs = "src/mmu/translation_table.rs";
-    let ttt_cxx = "src/mmu/translation_table.cpp";
-    let out_dir = std::env::var("OUT_DIR").unwrap();
+#[macro_use]
+extern crate anyhow;
 
-    cxx_build::bridge(ttt_rs)
-        .file(ttt_cxx)
+use anyhow::Result;
+use std::{env, path::Path};
+use walkdir::WalkDir;
+
+fn main() -> Result<()> {
+    let ttt_rs = "src/mmu/translation_table.rs";
+    let ttt_cxx = "src/cxx/src/translation_table.cpp";
+    let out_dir = env::var("OUT_DIR").unwrap();
+
+    let mut cxx = cxx_build::bridge(ttt_rs);
+    choose_compiler(&mut cxx, target_is_host().unwrap_or(true))?;
+
+    cxx.file(ttt_cxx)
         .include(&out_dir)
-        .flag_if_supported("-std=c++20")
-        .flag_if_supported("-ffreestanding")
-        .flag_if_supported("-mgeneral-regs-only")
-        .flag_if_supported("-fno-exceptions")
-        .flag_if_supported("-fno-unwind-tables")
-        .flag_if_supported("-fno-rtti")
-        .flag_if_supported("-fno-threadsafe-statics")
+        .flag("-std=c++20")
+        .flag("-ffreestanding")
+        .flag("-mgeneral-regs-only")
+        .flag("-fno-exceptions")
+        .flag("-fno-unwind-tables")
+        .flag("-fno-rtti")
+        .flag("-fno-threadsafe-statics")
         .cpp_set_stdlib(None)
         .compile("translation_table_cc");
+
+    Ok(())
+}
+
+fn choose_compiler(cxx: &mut cc::Build, is_host: bool) -> Result<()> {
+    const CPP_COMPILER_NAME: &str = "aarch64-none-elf-g++";
+    if is_host {
+        return Ok(());
+    }
+
+    let gcc_install_dir_var = env::var("AARCH64_NONE_ELF_TOOLCHAIN")?;
+    let gcc_install_dir = Path::new(&gcc_install_dir_var);
+    for entry in WalkDir::new(gcc_install_dir)
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(|e| !e.file_type().is_dir())
+    {
+        let f_name = entry.file_name().to_string_lossy();
+
+        if f_name == CPP_COMPILER_NAME {
+            cxx.compiler(entry.path().to_str().unwrap());
+            println!("cargo:warning=Using G++={}", entry.path().to_str().unwrap());
+            return Ok(());
+        }
+    }
+
+    bail!("Cannot Find G++ Executable");
+}
+
+fn target_is_host() -> Result<bool> {
+    Ok(env::var("TARGET")? == env::var("HOST")?)
 }

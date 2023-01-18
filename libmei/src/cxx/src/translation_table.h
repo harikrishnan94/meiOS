@@ -12,3 +12,10 @@ VMMap NextItem(TraverseContext &ctx);
 
 void EndTraversal(TraverseContext &ctx);
 } // namespace mei::mmu::tt
+
+namespace mei {
+[[noreturn]] inline void terminate() {
+  mmu::tt::terminate();
+  __builtin_unreachable();
+}
+} // namespace mei

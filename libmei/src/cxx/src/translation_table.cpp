@@ -1,8 +1,8 @@
-#include <experimental/coroutine>
+#include <algorithm>
 
 #include "bits.h"
 #include "generator.h"
-#include "libmei/src/mmu/translation_table.h"
+#include "translation_table.h"
 
 namespace mei::mmu::tt {
 using u32 = uint32_t;
@@ -27,7 +27,7 @@ enum : u64 {
 };
 
 enum DescriptorBits : u32 {
-  DESCRIPTOR_VALID_OFFSET = 1,
+  DESCRIPTOR_VALID_OFFSET = 0,
   DESCRIPTOR_TYPE_OFFSET = 1,
 
   OUTPUT_ADDR_4KIB_OFFSET = 12,
@@ -88,8 +88,8 @@ static constexpr auto parse_descriptor(reg desc, Level level)
   }
 }
 
-static constexpr auto create_vm_map(const reg &desc, Level lvl,
-                                    VirtualAddress &vaddr_start) -> VMMap {
+static auto create_vm_map(const reg &desc, Level lvl,
+                          VirtualAddress &vaddr_start) -> VMMap {
   auto offset = OUTPUT_ADDRESS_OFFSET_ON_LEVEL[lvl];
   auto output_address =
       bits::Get(desc, offset, OUTPUT_ADDRESS_NBITS_ON_LEVEL[lvl]);
@@ -116,17 +116,20 @@ static constexpr void free_empty_descs(const DescriptorTable &root,
   }
 }
 
-static auto Traverse(TraverseContext &ctx, const DescriptorTable &root,
+using yield_t = generator<VMMap>;
+
+static auto Traverse(std::allocator_arg_t,
+                     StackAllocator<yield_t::promise_type> alloc,
+                     TraverseContext &ctx, const DescriptorTable &root,
                      VirtualAddress vaddr_start, VirtualAddress vaddr_end,
-                     Level lvl) -> generator<VMMap> {
+                     Level lvl) -> yield_t {
   if (lvl == NUM_LEVELS) {
     ctx.has_error = true;
     co_return;
   }
 
   for (auto ind = get_index_for_level(vaddr_start, lvl);
-       ind < NUM_TABLE_DESC_ENTRIES && vaddr_start.val >= vaddr_end.val;
-       ind++) {
+       ind < NUM_TABLE_DESC_ENTRIES && vaddr_start.val < vaddr_end.val; ind++) {
     const auto &desc = root.descs[ind];
     auto type = parse_descriptor(desc, lvl);
 
@@ -136,12 +139,12 @@ static auto Traverse(TraverseContext &ctx, const DescriptorTable &root,
 
     case DescriptorType::TABLE: {
       auto child =
-          bits::Get(desc, NEXT_LEVEL_DESC_OFFSET, NEXT_LEVEL_DESC_NBITS) >>
-          NEXT_LEVEL_DESC_OFFSET;
+          bits::Get(desc, NEXT_LEVEL_DESC_OFFSET, NEXT_LEVEL_DESC_NBITS);
 
       // Descend down.
-      co_yield Traverse(ctx, *bit_cast<const DescriptorTable *>(child),
-                        vaddr_start, vaddr_end, lvl + 1);
+      co_yield Traverse(std::allocator_arg, alloc, ctx,
+                        *bit_cast<const DescriptorTable *>(child), vaddr_start,
+                        vaddr_end, lvl + 1);
       break;
     }
 
@@ -171,18 +174,30 @@ static auto Traverse(TraverseContext &ctx, const DescriptorTable &root,
   free_empty_descs(root, ctx);
 }
 
-static inline auto GEN(TraverseContext &ctx) {
-  return bit_cast<generator<VMMap> *>(ctx.traverse_stack.data());
-}
+static DefaultStackAllocator coro_alloc;
 
 void BeginTraversal(TraverseContext &ctx) {
+  coro_alloc.used = {};
+
+  StackAllocator<yield_t::promise_type> alloc{
+      bit_cast<DefaultStackAllocator *>(&coro_alloc)};
+  StackAllocator<yield_t> gen_alloc{
+      bit_cast<DefaultStackAllocator *>(&coro_alloc)};
+
+  yield_t *gen_ptr = gen_alloc.allocate(1);
+
   auto &root = *bit_cast<const DescriptorTable *>(ctx.root_desc);
-  new (GEN(ctx))
-      generator<VMMap>{Traverse(ctx, root, ctx.va_start, ctx.va_end, 0)};
+
+  // Move the allocated generator into the rust provided stack space.
+  auto gen = Traverse(std::allocator_arg, alloc, ctx, root, ctx.va_start,
+                      ctx.va_end, 0);
+  new (gen_ptr) yield_t{std::move(gen)};
+
+  ctx.gen_ptr = bit_cast<size_t>(gen_ptr);
 }
 
 VMMap NextItem(TraverseContext &ctx) {
-  auto gen = GEN(ctx);
+  auto gen = bit_cast<yield_t *>(ctx.gen_ptr);
   if (gen->move_next()) {
     return gen->current_value();
   } else {
@@ -191,5 +206,10 @@ VMMap NextItem(TraverseContext &ctx) {
   }
 }
 
-void EndTraversal(TraverseContext &ctx) { std::destroy_at(GEN(ctx)); }
+void EndTraversal(TraverseContext &ctx) {
+  std::destroy_at(bit_cast<yield_t *>(ctx.gen_ptr));
+}
 } // namespace mei::mmu::tt
+
+void operator delete(void *) noexcept { mei::terminate(); }
+void *operator new(size_t /* sz */) { mei::terminate(); }
