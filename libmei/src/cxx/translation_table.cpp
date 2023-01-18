@@ -150,9 +150,12 @@ static auto Traverse(std::allocator_arg_t,
             bits::Get(desc, NEXT_LEVEL_DESC_OFFSET, NEXT_LEVEL_DESC_NBITS);
 
         // Descend down.
-        co_yield Traverse(std::allocator_arg, alloc, ctx,
-                          *bit_cast<const DescriptorTable *>(child), vaddr,
-                          lvl + 1);
+        auto gen =
+            Traverse(std::allocator_arg, alloc, ctx,
+                     *bit_cast<const DescriptorTable *>(child), vaddr, lvl + 1);
+        while (gen) {
+          co_yield gen();
+        }
         break;
       }
 
@@ -203,15 +206,15 @@ void BeginTraversal(TraverseContext &ctx) {
 
   // Move the allocated generator into the rust provided stack space.
   auto gen = Traverse(std::allocator_arg, alloc, ctx, root, ctx.va_start, 0);
-  std::construct_at(gen_ptr, yield_t{std::move(gen)});
+  std::construct_at(gen_ptr, std::move(gen));
 
   ctx.gen_ptr = bit_cast<size_t>(gen_ptr);
 }
 
 VMMap NextItem(TraverseContext &ctx) {
-  auto gen = bit_cast<yield_t *>(ctx.gen_ptr);
-  if (gen->move_next()) {
-    return gen->current_value();
+  auto &gen = *bit_cast<yield_t *>(ctx.gen_ptr);
+  if (gen) [[likely]] {
+    return gen();
   } else {
     ctx.done = true;
     return {};

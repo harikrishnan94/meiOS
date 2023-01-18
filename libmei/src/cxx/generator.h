@@ -1,10 +1,10 @@
 #pragma once
 
-#include "stack_alloc.h"
-#include "translation_table.h"
-
 #include <memory>
 #include <variant>
+
+#include "stack_alloc.h"
+#include "translation_table.h"
 
 #ifdef __GLIBCXX__
 #include <coroutine>
@@ -15,50 +15,47 @@ namespace coro = std::experimental;
 #endif
 
 namespace mei {
-template <typename T> struct generator {
+template <typename T>
+struct generator {
   struct promise_type {
     promise_type() = default;
 
+    using Allocator = StackAllocator<promise_type>;
+
     template <typename... Args>
-    void *operator new(size_t size, std::allocator_arg_t,
-                       StackAllocator<promise_type> allocator,
+    void *operator new(size_t size, std::allocator_arg_t, Allocator allocator,
                        Args &&.../* args */) {
-      // Round up size to next multiple of ALLOCATOR alignment
-      std::size_t allocator_offset =
-          (size + alignof(StackAllocator<promise_type>) - 1u) &
-          ~(alignof(StackAllocator<promise_type>) - 1u);
+      // Round up size to next multiple of Allocator alignment
+      std::size_t allocator_offset = alignas_allocator(size);
 
       // Call onto allocator to allocate space for coroutine frame.
-      void *ptr = allocator.allocate_bytes(
-          allocator_offset + sizeof(StackAllocator<promise_type>));
+      void *ptr =
+          allocator.allocate_bytes(allocator_offset + sizeof(Allocator));
 
       // Take a copy of the allocator (assuming noexcept copy constructor here)
-      new (((char *)ptr) + allocator_offset)
-          StackAllocator<promise_type>(allocator);
+      std::construct_at(reinterpret_cast<Allocator *>(static_cast<char *>(ptr) +
+                                                      allocator_offset),
+                        std::move(allocator));
 
       return ptr;
     }
 
     void operator delete(void *ptr, std::size_t size) {
-      std::size_t allocator_offset =
-          (size + alignof(StackAllocator<promise_type>) - 1u) &
-          ~(alignof(StackAllocator<promise_type>) - 1u);
+      std::size_t allocator_offset = alignas_allocator(size);
 
-      StackAllocator<promise_type> &allocator_c =
-          *reinterpret_cast<StackAllocator<promise_type> *>(((char *)ptr) +
-                                                            allocator_offset);
+      Allocator &allocator =
+          *reinterpret_cast<Allocator *>(((char *)ptr) + allocator_offset);
 
       // Move allocator to local variable first so it isn't freeing its
       // own memory from underneath itself.
       // Assuming allocator move-constructor is noexcept here.
-      StackAllocator<promise_type> allocator_cp = std::move(allocator_c);
+      Allocator allocator_cp = std::move(allocator);
 
       // But don't forget to destruct allocator object in coroutine frame
-      std::destroy_at(&allocator_c);
+      std::destroy_at(&allocator);
 
       // Finally, free the memory using the allocator.
-      allocator_cp.deallocate_bytes(
-          ptr, allocator_offset + sizeof(StackAllocator<promise_type>));
+      allocator_cp.deallocate_bytes(ptr, allocator_offset + sizeof(Allocator));
     }
 
     generator get_return_object() {
@@ -74,68 +71,62 @@ template <typename T> struct generator {
 
     void await_transform() = delete;
 
-    template <class U> coro::suspend_always yield_value(U &&v) {
-      state.template emplace<1>(std::forward<U>(v));
+    template <typename U = T,
+              std::enable_if_t<!std::is_rvalue_reference<U>::value, int> = 0>
+    coro::suspend_always yield_value(
+        std::remove_reference_t<T> &value) noexcept {
+      m_value = std::addressof(value);
       return {};
     }
 
-    coro::suspend_always yield_value(generator &&g) {
-      state.template emplace<2>(std::move(g));
+    coro::suspend_always yield_value(
+        std::remove_reference_t<T> &&value) noexcept {
+      m_value = std::addressof(value);
       return {};
     }
 
-  private:
+   private:
     friend generator;
-    struct empty {};
-    std::variant<empty, T, generator> state;
+
+    static constexpr size_t alignas_allocator(size_t size) {
+      return (size + alignof(Allocator) - 1u) & ~(alignof(Allocator) - 1u);
+    }
+
+    T *m_value;
   };
 
-  bool move_next() {
-    if (!coro)
+  operator bool() {
+    coro.resume();
+    if (coro.done()) {
+      coro.destroy();
+      coro = {};
       return false;
-
-    auto &p = coro.promise();
-    do {
-      if (auto g = std::get_if<generator>(&p.state))
-        if (g->move_next())
-          return true;
-
-      coro.resume();
-      if (coro.done()) {
-        coro.destroy();
-        coro = {};
-        return false;
-      }
-
-    } while (std::get_if<generator>(&p.state));
-
+    }
     return true;
   }
 
-  T current_value() const {
+  T operator()() const {
     auto &p = coro.promise();
-    if (auto g = std::get_if<generator>(&p.state)) {
-      return g->current_value();
-    } else if (auto v = std::get_if<T>(&p.state)) {
-      return *v;
-    } else {
-      terminate();
-    }
+    return std::move(*p.m_value);
   }
 
   generator(const generator &) = delete;
-  generator(generator &&that) : coro(that.coro) { that.coro = {}; }
+  generator &operator=(const generator &) = delete;
 
-  ~generator() {
-    if (coro) {
-      coro.destroy();
-    }
+  generator(generator &&that) : coro(std::exchange(that.coro, {})) {}
+  generator &operator=(generator &&that) {
+    std::swap(that.coro, coro);
+    return *this;
   }
 
-private:
+  ~generator() {
+    if (coro) coro.destroy();
+  }
+
+ private:
   generator() {}
   generator(coro::coroutine_handle<promise_type> h) : coro(h) {}
   coro::coroutine_handle<promise_type> coro;
 };
 
-} // namespace mei
+}  // namespace mei

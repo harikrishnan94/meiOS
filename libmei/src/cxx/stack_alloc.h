@@ -3,9 +3,10 @@
 #include <array>
 
 namespace mei {
-static constexpr auto CoroMemSize = 1024;
+static constexpr auto CoroMemSize = 2048;
 
-template <size_t S> struct RawStackAllocator {
+template <size_t S>
+struct RawStackAllocator {
   static constexpr auto Size = S;
 
   size_t used;
@@ -14,8 +15,9 @@ template <size_t S> struct RawStackAllocator {
 
 using DefaultStackAllocator = RawStackAllocator<CoroMemSize>;
 
-template <typename T> class StackAllocator {
-public:
+template <typename T>
+class StackAllocator {
+ public:
   using value_type = T;
 
   StackAllocator(DefaultStackAllocator *alloc) : m_alloc(alloc) {}
@@ -31,8 +33,7 @@ public:
   }
 
   [[nodiscard]] void *allocate_bytes(std::size_t bytes) {
-    if (m_alloc->used + bytes > DefaultStackAllocator::Size)
-      return nullptr;
+    if (m_alloc->used + bytes > DefaultStackAllocator::Size) return nullptr;
 
     auto ptr = static_cast<void *>(m_alloc->mem.data() + m_alloc->used);
     m_alloc->used += bytes;
@@ -48,7 +49,7 @@ public:
     m_alloc->used -= bytes;
   }
 
-private:
+ private:
   DefaultStackAllocator *m_alloc;
 };
-} // namespace mei
+}  // namespace mei
