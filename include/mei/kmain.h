@@ -1,7 +1,7 @@
 #pragma once
 
-// Entry point for kernel.
-#define MEI_MAIN main
+// Entry point for kernel c++ code.
+#define MEI_MAIN mei_main
 
 /* MPIDR_EL1's last 2 bits contain the current cpu */
 #define CPUID_MASK ((1 << 2) - 1)

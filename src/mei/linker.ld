@@ -2,7 +2,7 @@
 binary_load_addr = 0x80000;
 page_size = 4096;
 
-ENTRY(_start)
+ENTRY(mei_start)
 
 /* Flags:
  *     4 == R

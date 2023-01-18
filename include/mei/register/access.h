@@ -15,12 +15,12 @@ struct any_register_value_modifier {
 }  // namespace dtl
 
 // clang-format off
-template <typename RVM, typename Register>
-concept register_value_modifier = register_t<Register> && requires(RVM m)
+template <typename FS, typename Register>
+concept field_set = register_t<Register> && requires(FS s)
 // clang-format on
 {
-  requires std::same_as<REG(RVM), Register>;
-  { m.Modify(std::declval<INTT(Register)>()) } -> std::same_as<typename RVM::ResultType>;
+  requires std::same_as<REG(FS), Register>;
+  { s.Modify(std::declval<INTT(Register)>()) } -> std::same_as<typename FS::ResultType>;
 };
 
 // clang-format off
@@ -58,38 +58,36 @@ class MemoryMappedRegister {
   using Register = TRegister;
   using IntType = INTT(Register);
 
-  explicit MemoryMappedRegister(IntType *val) : m_val(val) {}
+  [[nodiscard]] auto Get() const -> IntType { return m_val; }
 
-  [[nodiscard]] auto Get() const -> IntType { return *m_val; }
-
-  void Set(IntType val) { *m_val = val; }
+  void Set(IntType val) { m_val = val; }
 
  private:
-  volatile IntType *m_val;
+  volatile IntType m_val;
 };
 
 template <register_t R>
-struct RegisterValueModification {
+struct FieldSet {
   using Register = R;
   using ResultType = INTT(Register);
 
-  RegisterValueModification() = default;
+  FieldSet() = default;
 
-  constexpr explicit RegisterValueModification(field_value auto val)
+  constexpr explicit FieldSet(field_value auto val)
       : m_clr_mask(decltype(val)::Mask), m_update(val.ShiftedVal()) {}
 
-  constexpr void Add(const RegisterValueModification &rhs) {
+  constexpr void Add(const FieldSet &rhs) {
     m_clr_mask |= rhs.m_clr_mask;
     m_update |= rhs.m_update;
   }
 
-  constexpr void Remove(const RegisterValueModification &rhs) {
+  constexpr void Remove(const FieldSet &rhs) {
     m_clr_mask &= ~rhs.m_clr_mask;
     m_update &= ~rhs.m_clr_mask;
   }
 
-  constexpr void Add(field_value_of<R> auto val) { Add(RegisterValueModification(val)); }
-  constexpr void Remove(field_value_of<R> auto val) { Remove(RegisterValueModification(val)); }
+  constexpr void Add(field_value_of<R> auto val) { Add(FieldSet(val)); }
+  constexpr void Remove(field_value_of<R> auto val) { Remove(FieldSet(val)); }
 
   [[nodiscard]] constexpr auto Modify(ResultType oldval) const -> ResultType {
     return (oldval & ~m_clr_mask) | m_update;
@@ -101,61 +99,55 @@ struct RegisterValueModification {
 };
 
 template <field_value FV>
-RegisterValueModification(FV) -> RegisterValueModification<REG(FV)>;
+FieldSet(FV) -> FieldSet<REG(FV)>;
 
 template <register_t Register>
-constexpr auto operator+(const RegisterValueModification<Register> &lhs,
-                         const RegisterValueModification<Register> &rhs)
-    -> RegisterValueModification<Register> {
+constexpr auto operator+(const FieldSet<Register> &lhs, const FieldSet<Register> &rhs)
+    -> FieldSet<Register> {
   auto res = lhs;
   res.Add(rhs);
   return res;
 }
 
 template <register_t Register>
-constexpr auto operator-(const RegisterValueModification<Register> &lhs,
-                         const RegisterValueModification<Register> &rhs)
-    -> RegisterValueModification<Register> {
+constexpr auto operator-(const FieldSet<Register> &lhs, const FieldSet<Register> &rhs)
+    -> FieldSet<Register> {
   auto res = lhs;
   res.Remove(rhs);
   return res;
 }
 
 template <field_value FV>
-constexpr auto operator+(const RegisterValueModification<REG(FV)> &lhs, FV rhs)
-    -> RegisterValueModification<REG(FV)> {
+constexpr auto operator+(const FieldSet<REG(FV)> &lhs, FV rhs) -> FieldSet<REG(FV)> {
   auto res = lhs;
   res.Add(rhs);
   return res;
 }
 
 template <field_value FV>
-constexpr auto operator+=(RegisterValueModification<REG(FV)> &lhs, FV rhs)
-    -> RegisterValueModification<REG(FV)> & {
+constexpr auto operator+=(FieldSet<REG(FV)> &lhs, FV rhs) -> FieldSet<REG(FV)> & {
   lhs.Add(rhs);
   return lhs;
 }
 
 template <register_t Register>
-constexpr auto operator-=(RegisterValueModification<Register> &lhs,
-                          const RegisterValueModification<Register> &rhs)
-    -> RegisterValueModification<Register> & {
+constexpr auto operator-=(FieldSet<Register> &lhs, const FieldSet<Register> &rhs)
+    -> FieldSet<Register> & {
   lhs.Remove(rhs);
   return lhs;
 }
 
 template <field_value FV1, field_value FV2>
   requires(std::same_as<REG(FV1), REG(FV2)>)
-constexpr auto operator+(FV1 lhs, FV2 rhs) -> RegisterValueModification<REG(FV1)> {
-  RegisterValueModification<REG(FV1)> res{lhs};
+constexpr auto operator+(FV1 lhs, FV2 rhs) -> FieldSet<REG(FV1)> {
+  FieldSet<REG(FV1)> res{lhs};
   res.Add(rhs);
   return res;
 }
 
 template <field_value FV>
-constexpr auto operator+(FV lhs, const RegisterValueModification<REG(FV)> &rhs)
-    -> RegisterValueModification<REG(FV)> {
-  RegisterValueModification<REG(FV)> res{lhs};
+constexpr auto operator+(FV lhs, const FieldSet<REG(FV)> &rhs) -> FieldSet<REG(FV)> {
+  FieldSet<REG(FV)> res{lhs};
   res.Add(rhs);
   return res;
 }
@@ -163,7 +155,7 @@ constexpr auto operator+(FV lhs, const RegisterValueModification<REG(FV)> &rhs)
 // Creates a ResultValueModification to be used to remove fields from the RegisterValueModification
 // set.
 template <field F>
-static constexpr auto RM = RegisterValueModification{typename F::Value(0)};
+static constexpr auto RM = FieldSet{typename F::Value(0)};
 
 template <field F>
 constexpr auto Read(const register_storage_for<REG(F)> auto &rs) -> REG_INTT(F) {
@@ -175,21 +167,19 @@ constexpr auto ReadEnum(const register_storage_for<REG(F)> auto &rs) -> typename
   return static_cast<typename F::Enum>(Read<F>(rs));
 }
 
-constexpr void Modify(
-    register_storage auto &rs,
-    const register_value_modifier<REG(std::decay_t<decltype(rs)>)> auto &modifier) {
-  rs.Set(modifier.Modify(rs.Get()));
+constexpr void Modify(register_storage auto &rs,
+                      const field_set<REG(std::decay_t<decltype(rs)>)> auto &fs) {
+  rs.Set(fs.Modify(rs.Get()));
 }
 
-constexpr void ModifyNoRead(
-    register_storage auto &rs,
-    const register_value_modifier<REG(std::decay_t<decltype(rs)>)> auto &modifier) {
-  rs.Set(modifier.Modify(0));
+constexpr void ModifyNoRead(register_storage auto &rs,
+                            const field_set<REG(std::decay_t<decltype(rs)>)> auto &fs) {
+  rs.Set(fs.Modify(0));
 }
 
-template <register_storage RS, register_value_modifier<REG(RS)> RVM>
-constexpr auto operator|=(RS &rs, const RVM &modifier) -> RS & {
-  Modify(rs, modifier);
+template <register_storage RS, field_set<REG(RS)> FS>
+constexpr auto operator|=(RS &rs, const FS &fs) -> RS & {
+  Modify(rs, fs);
   return rs;
 }
 
@@ -198,9 +188,9 @@ class NOREAD {
  public:
   constexpr NOREAD(RS &rs) : m_rs(rs) {}
 
-  template <register_value_modifier<REG(RS)> RVM>
-  constexpr auto operator|=(const RVM &modifier) -> RS & {
-    ModifyNoRead(m_rs, modifier);
+  template <field_set<REG(RS)> FS>
+  constexpr auto operator|=(const FS &fs) -> RS & {
+    ModifyNoRead(m_rs, fs);
     return m_rs;
   }
 

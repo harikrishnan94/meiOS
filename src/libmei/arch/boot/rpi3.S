@@ -7,8 +7,8 @@
 /* To keep this in the first portion of the binary. */
 .section ".text.boot"
 
-.globl _start
-_start:
+.globl mei_start
+mei_start:
     /* Load current running core ID into x0 */
     mrs x0, MPIDR_EL1
     and x0, x0, #CPUID_MASK
@@ -43,7 +43,7 @@ _start:
 
 4:
     /* setup stack pointer to enable C functions */
-    ldr x0, =_start
+    ldr x0, =mei_start
     mov sp, x0
 
     /* Call constructors and initialize static variables */

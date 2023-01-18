@@ -8,7 +8,9 @@
 #include "mei/expected.h"
 #include "mei/fmt/format.h"
 #include "mei/kmain.h"
+#include "mei/print.h"
 #include "mei/register/format.h"
+#include "mei/utils/global.h"
 
 extern "C" void abort(void) {
   while (true) {
@@ -186,14 +188,6 @@ void uart_puts(const char *str) {
 
 using namespace mei::registers;
 
-template <typename... Args>
-void puts(fmt::format_string<Args...> fmt, Args &&...args) {
-  char str[128] = {};
-
-  fmt::format_to(&str[0], fmt, std::forward<Args>(args)...);
-  uart_puts(&str[0]);
-}
-
 enum class error { div_by_zero, not_even };
 
 constexpr auto get_val() -> mei::expected<mei::u64, error> {
@@ -225,6 +219,8 @@ static auto div_if_even(int a, int b) -> tl::expected<int, error> {
 
 /* Use C linkage for MEI_MAIN. */
 extern "C" void MEI_MAIN() {
+  mei::io::SetStdOut(mei::io::PL011UARTWriter());
+
   uart_init(3);
 
   using STAGE1_PAGE_DESCRIPTOR = mmu::STAGE1_PAGE_DESCRIPTOR::Register;
@@ -233,11 +229,11 @@ extern "C" void MEI_MAIN() {
 
   PageDesc desc{0};
   desc |= STAGE1_PAGE_DESCRIPTOR::OUTPUT_ADDR_4KiB::Value(0xFFFF);
-  puts("{:X}\n", desc);
+  mei::io::Stdout("{:X}\n", desc);
 
   const auto &CurrentEL = mei::registers::exception::CurrentEL::CurrentEL;
   // using CurrentELReg = exception::CurrentEL::Register;
 
-  puts("{}\n", CurrentEL);
-  puts("After set = 0x{:X}\n", Val.value());
+  mei::io::Stdout("{}\n", CurrentEL);
+  mei::io::Stdout("After set = 0x{:X}\n", Val.value());
 }

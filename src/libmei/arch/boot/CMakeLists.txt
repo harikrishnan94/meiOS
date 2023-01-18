@@ -11,4 +11,4 @@ else()
 endif()
 
 target_include_directories(boot PUBLIC ${MEI_INCLUDE_DIR})
-target_link_libraries(boot PUBLIC -static-libgcc -static -lgcc -lc -lstdc++)
+target_link_libraries(boot PUBLIC -static-libgcc -static -lgcc -lc)

@@ -30,7 +30,7 @@ struct format_fields<std::tuple<F, Fs...>> {
   using R = REG(F);
 
   static constexpr auto format(const mei::registers::register_storage_for<R> auto& rs,
-                               fmt::format_context& ctx) {
+                               ::fmt::format_context& ctx) {
     using FV = typename F::Value;
     using RFV = real_field_value<R, F, FV>;
 

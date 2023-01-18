@@ -2368,8 +2368,6 @@ void swap(expected<T, E> &lhs,
 }
 } // namespace tl
 
-#endif
-
 namespace mei {
 using namespace tl;
 }
@@ -2384,3 +2382,5 @@ using namespace tl;
   }).value()
 
 constexpr auto Err = []<typename E>(E &&e) { ::mei::make_unexpected(std::forward<E>(e)); };
+
+#endif
