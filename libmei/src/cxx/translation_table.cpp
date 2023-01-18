@@ -1,11 +1,12 @@
-#include "translation_table.h"
-
 #include <algorithm>
+#include <cinttypes>
 
 #include "bits.h"
 #include "generator.h"
+#include "libmei/src/mmu/translation_table.rs.h"
 
-namespace mei::mmu::tt {
+namespace mei {
+namespace mmu::tt {
 using u32 = uint32_t;
 using u64 = uint64_t;
 using reg = u64;
@@ -56,7 +57,9 @@ enum DescriptorBits : u32 {
       OUTPUT_ADDR_2MIB_NBITS + VIRTUAL_ADDRESS_LEVEL_IDX_BITS,
   OUTPUT_ADDR_4KIB_OFFSET = VIRTUAL_ADDRESS_NBITS - OUTPUT_ADDR_4KIB_NBITS,
 
-  NEXT_LEVEL_DESC_OFFSET = 12,
+  DESCRIPTOR_ENTRY_SIZE = sizeof(reg),
+  NEXT_LEVEL_DESC_OFFSET = std::countr_zero(
+      (1 << VIRTUAL_ADDRESS_LEVEL_IDX_BITS) * DESCRIPTOR_ENTRY_SIZE),
   NEXT_LEVEL_DESC_NBITS = VIRTUAL_ADDRESS_NBITS - NEXT_LEVEL_DESC_OFFSET,
 };
 
@@ -197,22 +200,16 @@ void BeginTraversal(TraverseContext &ctx) {
 
   StackAllocator<yield_t::promise_type> alloc{
       bit_cast<DefaultStackAllocator *>(&coro_alloc)};
-  StackAllocator<yield_t> gen_alloc{
-      bit_cast<DefaultStackAllocator *>(&coro_alloc)};
-
-  yield_t *gen_ptr = gen_alloc.allocate(1);
 
   auto &root = *bit_cast<const DescriptorTable *>(ctx.root_desc);
 
   // Move the allocated generator into the rust provided stack space.
   auto gen = Traverse(std::allocator_arg, alloc, ctx, root, ctx.va_start, 0);
-  std::construct_at(gen_ptr, std::move(gen));
-
-  ctx.gen_ptr = bit_cast<size_t>(gen_ptr);
+  std::construct_at(bit_cast<yield_t *>(&ctx.gen), std::move(gen));
 }
 
 VMMap NextItem(TraverseContext &ctx) {
-  auto &gen = *bit_cast<yield_t *>(ctx.gen_ptr);
+  auto &gen = *bit_cast<yield_t *>(&ctx.gen);
   if (gen) [[likely]] {
     return gen();
   } else {
@@ -222,9 +219,15 @@ VMMap NextItem(TraverseContext &ctx) {
 }
 
 void EndTraversal(TraverseContext &ctx) {
-  std::destroy_at(bit_cast<yield_t *>(ctx.gen_ptr));
+  std::destroy_at(bit_cast<yield_t *>(&ctx.gen));
 }
-}  // namespace mei::mmu::tt
+}  // namespace mmu::tt
+
+[[noreturn]] void terminate() {
+  mmu::tt::terminate();
+  __builtin_unreachable();
+}
+}  // namespace mei
 
 void operator delete(void *) noexcept { mei::terminate(); }
 void operator delete(void *, std::size_t /* n */) noexcept { mei::terminate(); }

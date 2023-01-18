@@ -1,21 +1,17 @@
 #pragma once
 
-#include "libmei/src/mmu/translation_table.rs.h"
+namespace mei {
+[[noreturn]] void terminate();
 
-#include <cinttypes>
-#include <utility>
+namespace mmu::tt {
+using coro_generator_t = void *;
+struct TraverseContext;
+struct VMMap;
 
-namespace mei::mmu::tt {
 void BeginTraversal(TraverseContext &ctx);
 
 VMMap NextItem(TraverseContext &ctx);
 
 void EndTraversal(TraverseContext &ctx);
-} // namespace mei::mmu::tt
-
-namespace mei {
-[[noreturn]] inline void terminate() {
-  mmu::tt::terminate();
-  __builtin_unreachable();
-}
-} // namespace mei
+}  // namespace mmu::tt
+}  // namespace mei

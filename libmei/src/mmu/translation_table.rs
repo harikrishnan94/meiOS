@@ -15,6 +15,7 @@ use core::{
     cmp::{max, min},
     mem::size_of,
     ops::Range,
+    ptr,
 };
 
 use tock_registers::{
@@ -559,7 +560,7 @@ impl TraverseIterator {
                 done: false,
                 num_empty_descs: 0,
                 empty_descs: Default::default(),
-                gen_ptr: 0,
+                gen: ptr::null_mut(),
             },
         };
         ffi::BeginTraversal(&mut iter.ctx);
@@ -1012,11 +1013,14 @@ mod ffi {
         done: bool,
         num_empty_descs: u32,
         empty_descs: [u64; 4],
-        gen_ptr: usize,
+        /// C++ specific
+        gen: *mut coro_generator_t,
     }
 
     unsafe extern "C++" {
         include!("libmei/src/cxx/translation_table.h");
+
+        type coro_generator_t;
 
         fn BeginTraversal(ctx: &mut TraverseContext);
         fn NextItem(ctx: &mut TraverseContext) -> VMMap;
