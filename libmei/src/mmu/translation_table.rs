@@ -1167,7 +1167,7 @@ mod tests {
             virt_addr += ONE_GIB;
         }
 
-        // memory_maps.shuffle(&mut thread_rng());
+        memory_maps.shuffle(&mut thread_rng());
         memory_maps
     }
 
@@ -1194,6 +1194,36 @@ mod tests {
                     assert_eq!(translation.phy_addr, desc.physical_address());
                     assert_eq!(translation.access_perms, desc.access_permissions());
                     assert_eq!(translation.memory_kind, MemoryKind::Normal);
+                }
+                MemoryMap::Device(_) => assert!(false, "Failure"),
+            }
+        }
+    }
+
+    fn traverse_test_using_vaddr(vaddr: VirtualAddress) {
+        let page_alloc = TestAllocator::default();
+        let memory_maps = generate_memory_maps(vaddr);
+        let translation_table = TranslationTable::new(&memory_maps, &page_alloc);
+
+        assert!(translation_table.is_ok());
+
+        let translation_table = translation_table.unwrap();
+
+        for map in &memory_maps {
+            match map {
+                MemoryMap::Normal(desc) => {
+                    let vaddr = desc.virtual_address();
+                    let paddr = desc.physical_address();
+                    let map_size = desc.num_pages() * FOUR_KIB;
+                    let mut size = 0;
+
+                    for pbo_info in translation_table.traverse(vaddr..vaddr + map_size, false) {
+                        assert_eq!(pbo_info.phy_block().start, paddr + size);
+                        let overlap = pbo_info.phy_block();
+                        size += (overlap.end - overlap.start) as usize;
+                    }
+
+                    assert_eq!(size, map_size);
                 }
                 MemoryMap::Device(_) => assert!(false, "Failure"),
             }
@@ -1251,6 +1281,15 @@ mod tests {
     }
 
     #[test]
+    fn traverse_sanity_test() {
+        let vaddr = get_random_virt_addr();
+
+        traverse_test_using_vaddr(vaddr + 1 * ONE_GIB);
+        traverse_test_using_vaddr(vaddr + 2 * TWO_MIB);
+        traverse_test_using_vaddr(vaddr + 3 * FOUR_KIB);
+    }
+
+    #[test]
     #[ignore]
     fn insert_long_test() {
         let vaddr = get_random_virt_addr();
@@ -1269,34 +1308,20 @@ mod tests {
     }
 
     #[test]
-    fn traverse_test() {
-        let page_alloc = TestAllocator::default();
+    #[ignore]
+    fn traverse_long_test() {
         let vaddr = get_random_virt_addr();
-        let memory_maps = generate_memory_maps(vaddr);
-        let translation_table = TranslationTable::new(&memory_maps, &page_alloc);
 
-        assert!(translation_table.is_ok());
+        (0..NUM_TABLE_DESC_ENTRIES).into_par_iter().for_each(|i| {
+            traverse_test_using_vaddr(vaddr + i * ONE_GIB);
+        });
 
-        let translation_table = translation_table.unwrap();
+        (0..NUM_TABLE_DESC_ENTRIES).into_par_iter().for_each(|i| {
+            traverse_test_using_vaddr(vaddr + i * TWO_MIB);
+        });
 
-        for map in &memory_maps {
-            match map {
-                MemoryMap::Normal(desc) => {
-                    let vaddr = desc.virtual_address();
-                    let paddr = desc.physical_address();
-                    let mut size = 0;
-
-                    for pbo_info in translation_table
-                        .traverse(vaddr..vaddr + desc.num_pages() * FOUR_KIB, false)
-                    {
-                        assert_eq!(pbo_info.phy_block().start, paddr + size);
-                        size += pbo_info.size();
-                    }
-
-                    assert_eq!(size, desc.num_pages() * FOUR_KIB);
-                }
-                MemoryMap::Device(_) => assert!(false, "Failure"),
-            }
-        }
+        (0..NUM_TABLE_DESC_ENTRIES).into_par_iter().for_each(|i| {
+            traverse_test_using_vaddr(vaddr + i * FOUR_KIB);
+        });
     }
 }

@@ -22,6 +22,8 @@ fn main() -> Result<()> {
         .flag("-fno-unwind-tables")
         .flag("-fno-rtti")
         .flag("-fno-threadsafe-statics")
+        .warnings(true)
+        .warnings_into_errors(true)
         .cpp_set_stdlib(None)
         .compile("translation_table_cc");
 

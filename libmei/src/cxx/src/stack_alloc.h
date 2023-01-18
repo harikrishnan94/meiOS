@@ -41,7 +41,11 @@ public:
   }
 
   void deallocate(void * /* p */, std::size_t n) noexcept {
-    m_alloc->used -= n * sizeof(T);
+    deallocate_bytes(n * sizeof(T));
+  }
+
+  void deallocate_bytes(void * /* p */, std::size_t bytes) noexcept {
+    m_alloc->used -= bytes;
   }
 
 private:

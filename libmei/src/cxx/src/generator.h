@@ -3,6 +3,7 @@
 #include "stack_alloc.h"
 #include "translation_table.h"
 
+#include <memory>
 #include <variant>
 
 #ifdef __GLIBCXX__
@@ -56,8 +57,8 @@ template <typename T> struct generator {
       std::destroy_at(&allocator_c);
 
       // Finally, free the memory using the allocator.
-      allocator_cp.deallocate(ptr, allocator_offset +
-                                       sizeof(StackAllocator<promise_type>));
+      allocator_cp.deallocate_bytes(
+          ptr, allocator_offset + sizeof(StackAllocator<promise_type>));
     }
 
     generator get_return_object() {
