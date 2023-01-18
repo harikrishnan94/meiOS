@@ -13,7 +13,8 @@
     "target-pointer-width": "64",
     "pre-link-args": {
         "ld.lld": [
-            "-Tmei-aarch64.ld"
+            "-Tmei-aarch64.ld",
+            "-nostdlib"
         ]
     }
 }

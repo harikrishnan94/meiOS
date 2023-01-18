@@ -13,8 +13,13 @@
                     "test",
                     "--no-run",
                     "--lib",
-                    "--manifest-path=${workspaceFolder}/libmei/Cargo.toml"
+                    "--manifest-path=${workspaceFolder}/libmei/Cargo.toml",
+                    "--target",
+                    "aarch64-apple-darwin"
                 ],
+                "env": {
+                    "RUSTFLAGS": "--cfg cxx_experimental_no_alloc -Zsanitizer=address"
+                }
             },
         },
         {

@@ -9,7 +9,13 @@
 //!     - Supports splitting/merging adjacent mappings.
 //!     - This is loaded into TTBR0 and is used in Un-privileged (User) mode.
 
-use core::{alloc::Layout, cell::UnsafeCell, cmp::min, mem::size_of};
+use core::{
+    alloc::Layout,
+    cell::UnsafeCell,
+    cmp::{max, min},
+    mem::size_of,
+    ops::Range,
+};
 
 use tock_registers::{
     interfaces::{ReadWriteable, Readable},
@@ -106,6 +112,16 @@ impl TranslationTable {
         desc_alloc: &DescAlloc,
     ) -> Result<()> {
         self.map_impl(&parse_memory_map(map), desc_alloc, map)
+    }
+
+    /// Traverse a range of Virtual Address.
+    /// For each mapping within the provided range, call the Visitor.
+    pub fn traverse(
+        &self,
+        vaddr_rng: Range<VirtualAddress>,
+        free_empty_descs: bool,
+    ) -> impl Iterator<Item = PhysicalBlockOverlapInfo> {
+        TraverseIterator::new(self.root.0.get() as u64, vaddr_rng, free_empty_descs)
     }
 
     /// Walk the translation table using the VirtualAddress `vaddr` and produce corresponding PhysicalAddress
@@ -447,6 +463,110 @@ impl TranslationTable {
         }
 
         Ok(())
+    }
+}
+
+/// Information about a physical block.
+pub struct PhysicalBlockOverlapInfo {
+    /// Range of physical block, that contains the overlap.
+    phy_block: PhysicalAddress,
+    vaddr: VirtualAddress,
+    size: u32,
+
+    /// Offest within the above `phy_block`, which ovelaps the provided VA space.
+    overlap: Range<u32>,
+}
+
+impl PhysicalBlockOverlapInfo {
+    fn new(ctx: &ffi::TraverseContext, map: &ffi::VMMap) -> Option<Self> {
+        if ctx.has_error {
+            return None;
+        }
+
+        let phy_start = PhysicalAddress::from(map.paddr);
+        let vaddr_start = VirtualAddress::from(map.vaddr);
+        let vaddr_end = vaddr_start + map.map_len;
+
+        let va_space_overlap_start = max(vaddr_start, ctx.va_start.into());
+        let va_space_overlap_end = min(vaddr_end, ctx.va_end.into());
+
+        Some(Self {
+            phy_block: phy_start,
+            vaddr: vaddr_start,
+            size: map.map_len as u32,
+            overlap: (va_space_overlap_start - vaddr_start) as u32
+                ..(va_space_overlap_end - vaddr_start) as u32,
+        })
+    }
+
+    pub fn phy_block(&self) -> Range<PhysicalAddress> {
+        self.phy_block..self.phy_block + self.size as usize
+    }
+
+    pub fn overlapping_range(&self) -> &Range<u32> {
+        &self.overlap
+    }
+
+    pub fn non_overlapping_range(&self) -> (Range<u32>, Range<u32>) {
+        (0..self.overlap.start, self.overlap.end..self.size)
+    }
+
+    pub fn remove_overlapping_range() -> Result<()> {
+        todo!()
+    }
+}
+
+pub struct TraverseIterator {
+    ctx: ffi::TraverseContext,
+}
+
+impl Iterator for TraverseIterator {
+    type Item = PhysicalBlockOverlapInfo;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if !self.ctx.done {
+            return None;
+        }
+
+        let res = ffi::NextItem(&mut self.ctx);
+        PhysicalBlockOverlapInfo::new(&self.ctx, &res)
+    }
+}
+
+impl Drop for TraverseIterator {
+    fn drop(&mut self) {
+        ffi::EndTraversal(&mut self.ctx);
+    }
+}
+
+impl TraverseIterator {
+    fn new(root_desc: u64, va_rng: Range<VirtualAddress>, free_empty_descs: bool) -> Self {
+        let mut iter = Self {
+            ctx: ffi::TraverseContext {
+                root_desc,
+                va_start: ffi::VirtualAddress {
+                    val: va_rng.start.as_raw_ptr() as u64,
+                },
+                va_end: ffi::VirtualAddress {
+                    val: va_rng.end.as_raw_ptr() as u64,
+                },
+                free_empty_descs,
+                has_error: false,
+                done: false,
+                num_empty_descs: 0,
+                empty_descs: Default::default(),
+                traverse_stack: [0; 256],
+            },
+        };
+        ffi::BeginTraversal(&mut iter.ctx);
+        iter
+    }
+
+    pub fn err(&self) -> Option<Error> {
+        if self.ctx.has_error {
+            return Some(Error::CorruptedTranslationTable(0));
+        }
+        return None;
     }
 }
 
@@ -854,6 +974,60 @@ fn load_desc_mut(descs: &DescriptorTable, idx: usize) -> &mut u64 {
     unsafe { &mut (*descs.0.get())[idx] }
 }
 
+#[cxx::bridge(namespace = "mei::mmu::tt")]
+mod ffi {
+    #[derive(Debug, Copy, Clone)]
+    struct PhysicalAddress {
+        val: u64,
+    }
+
+    #[derive(Debug, Copy, Clone)]
+    struct VirtualAddress {
+        val: u64,
+    }
+
+    #[derive(Debug, Copy, Clone)]
+    struct VMMap {
+        paddr: PhysicalAddress,
+        map_len: usize,
+        vaddr: VirtualAddress,
+        desc_ptr: u64,
+    }
+
+    #[derive(Debug, Copy, Clone)]
+    struct TraverseContext {
+        root_desc: u64,
+        va_start: VirtualAddress,
+        va_end: VirtualAddress,
+        free_empty_descs: bool,
+        has_error: bool,
+        done: bool,
+        num_empty_descs: u32,
+        empty_descs: [u64; 4],
+        traverse_stack: [u8; 256],
+    }
+
+    unsafe extern "C++" {
+        include!("libmei/src/mmu/translation_table.h");
+
+        fn BeginTraversal(ctx: &mut TraverseContext);
+        fn NextItem(ctx: &mut TraverseContext) -> VMMap;
+        fn EndTraversal(ctx: &mut TraverseContext);
+    }
+}
+
+impl From<ffi::PhysicalAddress> for PhysicalAddress {
+    fn from(item: ffi::PhysicalAddress) -> Self {
+        PhysicalAddress::new(item.val as usize)
+    }
+}
+
+impl From<ffi::VirtualAddress> for VirtualAddress {
+    fn from(item: ffi::VirtualAddress) -> Self {
+        VirtualAddress::new(item.val as usize).unwrap()
+    }
+}
+
 #[cfg(all(test, not(feature = "no_std")))]
 mod tests {
     extern crate std;
@@ -861,6 +1035,7 @@ mod tests {
     use core::{
         alloc::{AllocError, Allocator, Layout},
         cell::RefCell,
+        mem,
         ptr::NonNull,
     };
     use rand::{seq::SliceRandom, thread_rng, Rng};
@@ -1079,5 +1254,31 @@ mod tests {
         (0..NUM_TABLE_DESC_ENTRIES).into_par_iter().for_each(|i| {
             insert_test_using_vaddr(vaddr + i * FOUR_KIB);
         });
+    }
+
+    #[test]
+    fn traverse_test() {
+        let page_alloc = TestAllocator::default();
+        let vaddr = get_random_virt_addr();
+        let memory_maps = generate_memory_maps(vaddr);
+        let translation_table = TranslationTable::new(&memory_maps, &page_alloc);
+
+        assert!(translation_table.is_ok());
+
+        let translation_table = translation_table.unwrap();
+
+        for map in &memory_maps {
+            match map {
+                MemoryMap::Normal(desc) => {
+                    let vaddr = desc.virtual_address();
+                    for pbo_info in translation_table
+                        .traverse(vaddr..vaddr + desc.num_pages() * FOUR_KIB, false)
+                    {
+                        assert_eq!(pbo_info.phy_block().start, desc.physical_address());
+                    }
+                }
+                MemoryMap::Device(_) => assert!(false, "Failure"),
+            }
+        }
     }
 }
