@@ -53,7 +53,7 @@ enum DescriptorConsts : u32 {
   NEXT_LEVEL_DESC_NBITS = VIRTUAL_ADDRESS_NBITS - NEXT_LEVEL_DESC_OFFSET,
 };
 
-enum class DescriptorType { INVALID = 0, TABLE = 1, BLOCK = 2, PAGE = 3 };
+enum class DescriptorType { INVALID, TABLE, BLOCK, PAGE };
 
 static constexpr auto va_spacing_per_entry(Level lvl) {
   return FOUR_KIB << (MAX_TRANSLATION_LEVELS - 1 - lvl) *
@@ -191,7 +191,7 @@ static auto get(VirtualAddress vaddr, reg descs_ptr, VMMap &map) -> bool {
   return true;
 }
 
-using descs_stash_t = std::array<reg, 3>;
+using descs_stash_t = std::array<reg, MAX_TRANSLATION_LEVELS - 1>;
 
 static auto next(TraverseContext &ctx, reg descs_ptr, VirtualAddress &vaddr,
                  descs_stash_t &stash) -> reg {
