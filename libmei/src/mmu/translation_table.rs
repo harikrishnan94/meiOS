@@ -15,7 +15,7 @@ use core::{
     cmp::{max, min},
     mem::{size_of, MaybeUninit},
     ops::Range,
-    ptr,
+    ptr::{self, NonNull},
 };
 
 use tock_registers::{
@@ -121,26 +121,18 @@ impl TranslationTable {
         &self,
         vaddr_rng: Range<VirtualAddress>,
         free_empty_descs: bool,
-    ) -> impl Iterator<Item = PhysicalBlockOverlapInfo> {
+    ) -> impl Iterator<Item = TraverseYield> {
         TraverseIterator::new(self.root.0.get() as u64, vaddr_rng, free_empty_descs)
     }
 
     /// Walk the translation table using the VirtualAddress `vaddr` and produce corresponding PhysicalAddress
     /// This is similar to what CPU does after a TLB Miss.
     pub fn virt2phy(&self, vaddr: VirtualAddress) -> Option<TranslationDesc> {
-        // #[cfg(test)]
-        // print!("Translating vaddr {vaddr}...");
         let mut descs = &self.root;
 
         for level in TRANSLATION_LEVELS.iter() {
             let idx = vaddr.get_idx_for_level(level);
             let desc = load_desc(descs, idx);
-
-            // #[cfg(test)]
-            // print!(
-            //     "Visiting 0x{:X}[{idx}] at level {level:?}...",
-            //     descs.0.as_ptr() as u64
-            // );
 
             let to_translation_desc = |desc: u64| {
                 let ll_desc = Stage1LastLevelDescriptor::new(desc);
@@ -161,21 +153,13 @@ impl TranslationTable {
 
             match parse_desc(desc, level).ok()? {
                 Descriptor::Table(tbl_desc) => {
-                    // #[cfg(test)]
-                    // print!("Found TBL Desc: 0x{:X}...", tbl_desc.get());
                     assert_ne!(level, &AddressTranslationLevel::Three);
                     descend_tbl_desc(tbl_desc, &mut descs);
                 }
                 Descriptor::Block(block_desc) => return to_translation_desc(block_desc.get()),
                 Descriptor::Page(page_desc) => return to_translation_desc(page_desc.get()),
-                Descriptor::Invalid => {
-                    // #[cfg(test)]
-                    // print!("Found Invalid Desc: 0x{desc:X}...");
-                    return None;
-                }
+                Descriptor::Invalid => return None,
             }
-            // #[cfg(test)]
-            // std::io::Write::flush(&mut std::io::stdout());
         }
 
         bug!("Cannot reach here");
@@ -200,46 +184,22 @@ impl TranslationTable {
             num_pages: 0,
         };
 
-        // #[cfg(test)]
-        // print!(
-        //     "Mapping paddr {} to vaddr {}...",
-        //     map.phy_addr, map.virt_addr
-        // );
-
         map.num_pages = map_scheme.four_kib_aligned_span;
         while map.num_pages > 0 {
             self.install_page_descs(&mut map, desc_alloc, mmap)
-                .map_err(|e| {
-                    // #[cfg(test)]
-                    // println!("{e:?}");
-                    e
-                })?;
-            // #[cfg(test)]
-            // println!("Done")
+                .map_err(|e| e)?;
         }
 
         map.num_pages = map_scheme.two_mib_aligned_span;
         while map.num_pages > 0 {
             self.install_l2_block_desc(&mut map, desc_alloc, mmap)
-                .map_err(|e| {
-                    // #[cfg(test)]
-                    // println!("{e:?}");
-                    e
-                })?;
-            // #[cfg(test)]
-            // println!("Done")
+                .map_err(|e| e)?;
         }
 
         map.num_pages = map_scheme.one_gib_aligned_span;
         while map.num_pages > 0 {
             self.install_l1_block_desc(&mut map, desc_alloc, mmap)
-                .map_err(|e| {
-                    // #[cfg(test)]
-                    // println!("{e:?}");
-                    e
-                })?;
-            // #[cfg(test)]
-            // println!("Done")
+                .map_err(|e| e)?;
         }
 
         Ok(())
@@ -257,27 +217,16 @@ impl TranslationTable {
             let idx = map.virt_addr.get_idx_for_level(level);
             let desc = load_desc(descs, idx);
 
-            // #[cfg(test)]
-            // print!(
-            //     "Visiting 0x{:X}[{idx}] at level {level:?}...",
-            //     descs.0.as_ptr() as u64
-            // );
-
             match parse_desc(desc, level).map_err(|_| Error::CorruptedTranslationTable(desc))? {
                 Descriptor::Table(tbl_desc) => {
-                    // #[cfg(test)]
-                    // print!("Found TBL Desc: 0x{:X}...", tbl_desc.get());
                     assert_ne!(level, &AddressTranslationLevel::Three);
                     descend_tbl_desc(tbl_desc, &mut descs);
                 }
                 Descriptor::Block(_) | Descriptor::Page(_) => {
-                    // #[cfg(test)]
-                    // print!("Found Block Or Page Desc: 0x{desc:X}...");
-                    return Err(Error::VMMapExists(*mmap));
+                    return Err(Error::VMMapExists(*mmap))
                 }
+
                 Descriptor::Invalid => {
-                    // #[cfg(test)]
-                    // print!("Found Invalid Desc: 0x{desc:X}...");
                     match level {
                         // We need to insert only Page Descriptor.
                         // Until we reach level 3, insert Table Descriptors.
@@ -303,8 +252,6 @@ impl TranslationTable {
                     }
                 }
             }
-            // #[cfg(test)]
-            // std::io::Write::flush(&mut std::io::stdout());
         }
 
         Ok(())
@@ -322,32 +269,15 @@ impl TranslationTable {
             let idx = map.virt_addr.get_idx_for_level(level);
             let desc = load_desc(descs, idx);
 
-            // #[cfg(test)]
-            // print!(
-            //     "Visiting 0x{:X}[{idx}] at level {level:?}...",
-            //     descs.0.as_ptr() as u64
-            // );
-
             match parse_desc(desc, level).map_err(|_| Error::CorruptedTranslationTable(desc))? {
                 Descriptor::Table(tbl_desc) => {
-                    // #[cfg(test)]
-                    // print!("Found TBL Desc: 0x{:X}...", tbl_desc.get());
                     assert_ne!(level, &AddressTranslationLevel::Three);
                     descend_tbl_desc(tbl_desc, &mut descs);
                 }
-                Descriptor::Block(_) => {
-                    // #[cfg(test)]
-                    // print!("Found Block Desc: 0x{desc:X}...");
-                    return Err(Error::VMMapExists(*mmap));
-                }
-                Descriptor::Page(_) => {
-                    // #[cfg(test)]
-                    // print!("Found Page Desc: 0x{desc:X}...");
-                    return Err(Error::CorruptedTranslationTable(desc));
-                }
+                Descriptor::Block(_) => return Err(Error::VMMapExists(*mmap)),
+                Descriptor::Page(_) => return Err(Error::CorruptedTranslationTable(desc)),
+
                 Descriptor::Invalid => {
-                    // #[cfg(test)]
-                    // print!("Found Invalid Desc: 0x{desc:X}...");
                     // We need to insert only Level 2 Block Descriptor.
                     // Until we reach level 2, insert Table Descriptors.
                     match level {
@@ -378,8 +308,6 @@ impl TranslationTable {
                     }
                 }
             }
-            // #[cfg(test)]
-            // std::io::Write::flush(&mut std::io::stdout());
         }
 
         Ok(())
@@ -397,38 +325,20 @@ impl TranslationTable {
             let idx = map.virt_addr.get_idx_for_level(level);
             let desc = load_desc(descs, idx);
 
-            // #[cfg(test)]
-            // print!(
-            //     "Visiting 0x{:X}[{idx}] at level {level:?}...",
-            //     descs.0.as_ptr() as u64
-            // );
-
             match parse_desc(desc, level).map_err(|_| Error::CorruptedTranslationTable(desc))? {
                 Descriptor::Table(tbl_desc) => {
-                    // #[cfg(test)]
-                    // print!("Found TBL Desc: 0x{:X}...", tbl_desc.get());
                     assert_ne!(level, &AddressTranslationLevel::Three);
                     descend_tbl_desc(tbl_desc, &mut descs);
                 }
                 Descriptor::Block(_) => {
                     if *level == AddressTranslationLevel::One {
-                        // #[cfg(test)]
-                        // print!("Found L1 Block Desc: 0x{desc:X}...");
                         return Err(Error::VMMapExists(*mmap));
                     } else {
-                        // #[cfg(test)]
-                        // print!("Found L2 Block Desc: 0x{desc:X}...");
                         return Err(Error::CorruptedTranslationTable(desc));
                     }
                 }
-                Descriptor::Page(_) => {
-                    // #[cfg(test)]
-                    // print!("Found Page Desc: 0x{desc:X}...");
-                    return Err(Error::CorruptedTranslationTable(desc));
-                }
+                Descriptor::Page(_) => return Err(Error::CorruptedTranslationTable(desc)),
                 Descriptor::Invalid => {
-                    // #[cfg(test)]
-                    // print!("Found Invalid Desc: 0x{desc:X}...");
                     // We need to insert only Level 1 Block Descriptor.
                     // Until we reach level 1, insert Table Descriptors.
                     match level {
@@ -459,12 +369,15 @@ impl TranslationTable {
                     }
                 }
             }
-            // #[cfg(test)]
-            // std::io::Write::flush(&mut std::io::stdout());
         }
 
         Ok(())
     }
+}
+
+pub enum TraverseYield {
+    PhysicalBlock(PhysicalBlockOverlapInfo),
+    UnusedMemory(NonNull<u8>),
 }
 
 /// Information about a physical block.
@@ -480,7 +393,7 @@ pub struct PhysicalBlockOverlapInfo {
 
 impl PhysicalBlockOverlapInfo {
     fn new(ctx: &ffi::TraverseContext, map: &ffi::VMMap) -> Option<Self> {
-        if ctx.has_error || ctx.done {
+        if ctx.done {
             return None;
         }
 
@@ -526,15 +439,26 @@ pub struct TraverseIterator {
 }
 
 impl Iterator for TraverseIterator {
-    type Item = PhysicalBlockOverlapInfo;
+    type Item = TraverseYield;
 
     fn next(&mut self) -> Option<Self::Item> {
+        if self.ctx.num_empty_descs != 0 {
+            let free_desc = self.ctx.empty_descs[self.ctx.num_empty_descs as usize - 1];
+            self.ctx.num_empty_descs -= 1;
+
+            return Some(TraverseYield::UnusedMemory(NonNull::from(unsafe {
+                &*(free_desc as *const u8)
+            })));
+        }
+
         if self.ctx.done {
             return None;
         }
 
         let res = ffi::NextItem(&mut self.ctx);
-        PhysicalBlockOverlapInfo::new(&self.ctx, &res)
+        Some(TraverseYield::PhysicalBlock(PhysicalBlockOverlapInfo::new(
+            &self.ctx, &res,
+        )?))
     }
 }
 
@@ -557,7 +481,6 @@ impl TraverseIterator {
                     val: va_rng.end.as_raw_ptr() as u64,
                 },
                 free_empty_descs,
-                has_error: false,
                 done: false,
                 num_empty_descs: 0,
                 empty_descs: Default::default(),
@@ -568,20 +491,11 @@ impl TraverseIterator {
         ffi::BeginTraversal(&mut iter.ctx);
         iter
     }
-
-    pub fn err(&self) -> Option<Error> {
-        if self.ctx.has_error {
-            return Some(Error::CorruptedTranslationTable(0));
-        }
-        return None;
-    }
 }
 
 fn get_next_level_desc<'tt>(tbl_desc: &Stage1TableDescriptor) -> &'tt DescriptorTable {
     let next_lvl_desc = read_next_level_desc(&tbl_desc);
     assert_ne!(next_lvl_desc, 0);
-    // #[cfg(test)]
-    // print!("descending to 0x{next_lvl_desc:X}...");
     unsafe { &*(next_lvl_desc as *mut DescriptorTable) }
 }
 
@@ -610,8 +524,6 @@ fn install_new_tbl_desc<DescAlloc: PhysicalPageAllocator>(
         Ok(ptr as u64)
     };
     let next_level_table = alloc_desc_table()?;
-    // #[cfg(test)]
-    // print!("allocating TBL Desc 0x{next_level_table:X}...");
     let tbl_desc = Stage1TableDescriptor::new(new_stage1_table_desc(next_level_table));
     *new_desc = tbl_desc.get();
     Ok(tbl_desc)
@@ -635,9 +547,6 @@ fn install_contigious_mappings<F: Fn(u64, u64) -> u64>(
     map.phy_addr += num_mapped_pages * page_size;
     map.virt_addr += num_mapped_pages * page_size;
     map.num_pages -= num_mapped_pages;
-
-    // #[cfg(test)]
-    // print!("Installing {num_mapped_pages} mappings of size: {page_size}...",);
 }
 
 #[derive(Default, Clone, Copy)]
@@ -842,8 +751,6 @@ fn parse_output_address(
         AddressTranslationLevel::Zero => bug!("unexpected level for parse_output_address"),
         AddressTranslationLevel::One => {
             assert!(!ll_desc.is_set(STAGE1_LAST_LEVEL_DESCRIPTOR::TYPE));
-            // #[cfg(test)]
-            // print!("Found L1 Block Desc: 0x{:X}...", ll_desc.get());
             PhysicalAddress::new(
                 (ll_desc.read(STAGE1_LAST_LEVEL_DESCRIPTOR::OUTPUT_ADDR_1GiB)
                     << LEVEL_1_OUTPUT_ADDR_SHIFT) as usize,
@@ -851,8 +758,6 @@ fn parse_output_address(
         }
         AddressTranslationLevel::Two => {
             assert!(!ll_desc.is_set(STAGE1_LAST_LEVEL_DESCRIPTOR::TYPE));
-            // #[cfg(test)]
-            // print!("Found L2 Block Desc: 0x{:X}...", ll_desc.get());
             PhysicalAddress::new(
                 (ll_desc.read(STAGE1_LAST_LEVEL_DESCRIPTOR::OUTPUT_ADDR_2MiB)
                     << LEVEL_2_OUTPUT_ADDR_SHIFT) as usize,
@@ -860,8 +765,6 @@ fn parse_output_address(
         }
         AddressTranslationLevel::Three => {
             assert!(ll_desc.is_set(STAGE1_LAST_LEVEL_DESCRIPTOR::TYPE));
-            // #[cfg(test)]
-            // print!("Found Page Desc: 0x{:X}...", ll_desc.get());
             PhysicalAddress::new(
                 (ll_desc.read(STAGE1_LAST_LEVEL_DESCRIPTOR::OUTPUT_ADDR_4KiB)
                     << LEVEL_3_OUTPUT_ADDR_SHIFT) as usize,
@@ -1011,7 +914,6 @@ mod ffi {
         va_start: VirtualAddress,
         va_end: VirtualAddress,
         free_empty_descs: bool,
-        has_error: bool,
         done: bool,
         num_empty_descs: u32,
         empty_descs: [u64; 4],
@@ -1054,18 +956,21 @@ mod tests {
     use core::{
         alloc::{AllocError, Allocator, Layout},
         cell::RefCell,
-        mem,
+        mem::{self, size_of},
         ptr::NonNull,
     };
     use rand::{seq::SliceRandom, thread_rng, Rng};
     use rayon::prelude::*;
-    use std::{collections::HashMap, println, vec::Vec};
+    use std::{collections::HashMap, vec::Vec};
 
     use crate::{
         address::{PhysicalAddress, VirtualAddress},
+        bug,
         mmu::{
-            translation_table::{TranslationTable, NUM_TABLE_DESC_ENTRIES},
-            GRANULE_SIZE, OUTPUT_ADDR_BITS,
+            translation_table::{
+                DescriptorTable, TranslationTable, TraverseYield, NUM_TABLE_DESC_ENTRIES,
+            },
+            GRANULE_SIZE, OUTPUT_ADDR_BITS, TRANSLATION_TABLE_DESC_ALIGN,
         },
         vm::{AccessPermissions, MapDesc, MemoryKind, MemoryMap, PhysicalPageAllocator},
     };
@@ -1192,10 +1097,8 @@ mod tests {
                 MemoryMap::Normal(desc) => {
                     let vaddr = desc.virtual_address();
                     let translation = translation_table.virt2phy(vaddr);
-                    // println!("");
 
                     assert!(translation.is_some());
-
                     let translation = translation.unwrap();
 
                     assert_eq!(translation.phy_addr, desc.physical_address());
@@ -1210,6 +1113,9 @@ mod tests {
     fn traverse_test_using_vaddr(vaddr: VirtualAddress) {
         let page_alloc = TestAllocator::default();
         let memory_maps = generate_memory_maps(vaddr);
+        let layout =
+            Layout::from_size_align(size_of::<DescriptorTable>(), TRANSLATION_TABLE_DESC_ALIGN)
+                .unwrap_or_else(|_| bug!("Descriptor Layout Mismatch"));
         let translation_table = TranslationTable::new(&memory_maps, &page_alloc);
 
         assert!(translation_table.is_ok());
@@ -1224,10 +1130,17 @@ mod tests {
                     let map_size = desc.num_pages() * FOUR_KIB;
                     let mut size = 0;
 
-                    for pbo_info in translation_table.traverse(vaddr..vaddr + map_size, false) {
-                        assert_eq!(pbo_info.phy_block().start, paddr + size);
-                        let overlap = pbo_info.phy_block();
-                        size += (overlap.end - overlap.start) as usize;
+                    for res in translation_table.traverse(vaddr..vaddr + map_size, true) {
+                        match res {
+                            TraverseYield::PhysicalBlock(pbo_info) => {
+                                assert_eq!(pbo_info.phy_block().start, paddr + size);
+                                let overlap = pbo_info.phy_block();
+                                size += (overlap.end - overlap.start) as usize;
+                            }
+                            TraverseYield::UnusedMemory(mem) => unsafe {
+                                page_alloc.deallocate(mem, layout)
+                            },
+                        }
                     }
 
                     assert_eq!(size, map_size);
