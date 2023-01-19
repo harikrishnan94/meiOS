@@ -20,4 +20,4 @@ template <std::unsigned_integral I>
 constexpr auto Clear(I val, uint start_pos, uint count) {
   return val & ~CreateMask<I>(count, start_pos);
 }
-} // namespace mei::bits
+}  // namespace mei::bits

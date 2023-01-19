@@ -3,7 +3,7 @@
 #include <array>
 
 namespace mei {
-static constexpr auto CoroMemSize = 2048;
+static constexpr auto CoroMemSize = 200;
 
 template <size_t S>
 struct RawStackAllocator {

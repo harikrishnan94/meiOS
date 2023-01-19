@@ -2,7 +2,6 @@
 
 #include <memory>
 #include <utility>
-#include <variant>
 
 #include "stack_alloc.h"
 #include "translation_table.h"
@@ -125,7 +124,7 @@ struct generator {
   }
 
  private:
-  generator() {}
+  generator() = default;
   generator(coro::coroutine_handle<promise_type> h) : coro(h) {}
   coro::coroutine_handle<promise_type> coro;
 };

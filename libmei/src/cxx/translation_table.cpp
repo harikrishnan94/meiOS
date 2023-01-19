@@ -5,6 +5,13 @@
 #include "generator.h"
 #include "libmei/src/mmu/translation_table.rs.h"
 
+#ifndef NDEBUG
+#define assert_x(cond) \
+  if (!(cond)) terminate();
+#else
+#define assert_x(cond)
+#endif
+
 namespace mei {
 namespace mmu::tt {
 using u32 = uint32_t;
@@ -22,40 +29,23 @@ static inline auto bit_cast(From from) -> To {
   return data.to;
 }
 
-enum : u64 {
-  ONE_GIB = 1024 * 1024 * 1024,
-  TWO_MIB = 2 * 1024 * 1024,
-  FOUR_KIB = 4 * 1024,
-};
+static constexpr u64 FOUR_KIB = 4 * 1024;
 
-enum Translation : u64 {
-  NUM_LEVELS = 4,
+enum TranslationConsts : u64 {
   VIRTUAL_ADDRESS_IGNORE_MSB = 16,
+  VIRTUAL_ADDRESS_LEVEL_IDX_BITS = 9,
   VIRTUAL_ADDRESS_NBITS =
       std::countr_zero(VirtualAddress{0}.val) - VIRTUAL_ADDRESS_IGNORE_MSB,
   VIRTUAL_ADDRESS_PAGE_OFFSET_NBITS = std::countr_one(FOUR_KIB - 1),
-  VIRTUAL_ADDRESS_LEVEL_IDX_BITS = 9,
+  MAX_TRANSLATION_LEVELS =
+      (VIRTUAL_ADDRESS_NBITS - VIRTUAL_ADDRESS_PAGE_OFFSET_NBITS) /
+      VIRTUAL_ADDRESS_LEVEL_IDX_BITS,
   NUM_TABLE_DESC_ENTRIES = (1ULL << VIRTUAL_ADDRESS_LEVEL_IDX_BITS)
 };
 
-enum DescriptorBits : u32 {
+enum DescriptorConsts : u32 {
   DESCRIPTOR_VALID_OFFSET = 0,
   DESCRIPTOR_TYPE_OFFSET = 1,
-
-  OUTPUT_ADDR_512GIB_NBITS = VIRTUAL_ADDRESS_LEVEL_IDX_BITS,
-  OUTPUT_ADDR_512GIB_OFFSET = VIRTUAL_ADDRESS_NBITS - OUTPUT_ADDR_512GIB_NBITS,
-
-  OUTPUT_ADDR_1GIB_NBITS =
-      OUTPUT_ADDR_512GIB_NBITS + VIRTUAL_ADDRESS_LEVEL_IDX_BITS,
-  OUTPUT_ADDR_1GIB_OFFSET = VIRTUAL_ADDRESS_NBITS - OUTPUT_ADDR_1GIB_NBITS,
-
-  OUTPUT_ADDR_2MIB_NBITS =
-      OUTPUT_ADDR_1GIB_NBITS + VIRTUAL_ADDRESS_LEVEL_IDX_BITS,
-  OUTPUT_ADDR_2MIB_OFFSET = VIRTUAL_ADDRESS_NBITS - OUTPUT_ADDR_2MIB_NBITS,
-
-  OUTPUT_ADDR_4KIB_NBITS =
-      OUTPUT_ADDR_2MIB_NBITS + VIRTUAL_ADDRESS_LEVEL_IDX_BITS,
-  OUTPUT_ADDR_4KIB_OFFSET = VIRTUAL_ADDRESS_NBITS - OUTPUT_ADDR_4KIB_NBITS,
 
   DESCRIPTOR_ENTRY_SIZE = sizeof(reg),
   NEXT_LEVEL_DESC_OFFSET = std::countr_zero(
@@ -65,24 +55,28 @@ enum DescriptorBits : u32 {
 
 enum class DescriptorType { INVALID = 0, TABLE = 1, BLOCK = 2, PAGE = 3 };
 
-static constexpr u64 VA_SPACING_PER_ENTRY[] = {
-    1ULL << OUTPUT_ADDR_512GIB_OFFSET, 1ULL << OUTPUT_ADDR_1GIB_OFFSET,
-    1ULL << OUTPUT_ADDR_2MIB_OFFSET, 1ULL << OUTPUT_ADDR_4KIB_OFFSET};
+static constexpr auto va_spacing_per_entry(Level lvl) {
+  return FOUR_KIB << (MAX_TRANSLATION_LEVELS - 1 - lvl) *
+                         VIRTUAL_ADDRESS_LEVEL_IDX_BITS;
+}
 
-static constexpr u64 OUTPUT_ADDRESS_OFFSET_ON_LEVEL[] = {
-    OUTPUT_ADDR_512GIB_OFFSET, OUTPUT_ADDR_1GIB_OFFSET, OUTPUT_ADDR_2MIB_OFFSET,
-    OUTPUT_ADDR_4KIB_OFFSET};
-static constexpr u64 OUTPUT_ADDRESS_NBITS_ON_LEVEL[] = {
-    OUTPUT_ADDR_512GIB_NBITS, OUTPUT_ADDR_1GIB_NBITS, OUTPUT_ADDR_2MIB_NBITS,
-    OUTPUT_ADDR_4KIB_NBITS};
+static constexpr auto output_address_offest(Level lvl) {
+  return VIRTUAL_ADDRESS_PAGE_OFFSET_NBITS +
+         (MAX_TRANSLATION_LEVELS - 1 - lvl) * VIRTUAL_ADDRESS_LEVEL_IDX_BITS;
+}
+
+static constexpr auto output_address_nbits(Level lvl) {
+  return VIRTUAL_ADDRESS_NBITS - output_address_offest(lvl);
+}
 
 struct DescriptorTable {
   std::array<reg, NUM_TABLE_DESC_ENTRIES> descs;
 };
 
 static constexpr size_t get_index_for_level(VirtualAddress vaddr, Level lvl) {
-  auto offset = VIRTUAL_ADDRESS_PAGE_OFFSET_NBITS +
-                (NUM_LEVELS - 1 - lvl) * VIRTUAL_ADDRESS_LEVEL_IDX_BITS;
+  auto offset =
+      VIRTUAL_ADDRESS_PAGE_OFFSET_NBITS +
+      (MAX_TRANSLATION_LEVELS - 1 - lvl) * VIRTUAL_ADDRESS_LEVEL_IDX_BITS;
   return bits::Get(vaddr.val, offset, VIRTUAL_ADDRESS_LEVEL_IDX_BITS) >> offset;
 }
 
@@ -93,9 +87,10 @@ static constexpr auto parse_descriptor(reg desc, Level level)
 
   if (bits::Get(desc, DESCRIPTOR_TYPE_OFFSET, 1)) {
     // Table or Page
-    return level == NUM_LEVELS - 1 ? DescriptorType::PAGE
-                                   : DescriptorType::TABLE;
+    return level == MAX_TRANSLATION_LEVELS - 1 ? DescriptorType::PAGE
+                                               : DescriptorType::TABLE;
   } else {
+    assert_x(level == 1 || level == 2);
     // Block
     return DescriptorType::BLOCK;
   }
@@ -103,112 +98,187 @@ static constexpr auto parse_descriptor(reg desc, Level level)
 
 static auto create_vm_map(const reg &desc, Level lvl, VirtualAddress vaddr)
     -> VMMap {
-  auto offset = OUTPUT_ADDRESS_OFFSET_ON_LEVEL[lvl];
-  auto output_address =
-      bits::Get(desc, offset, OUTPUT_ADDRESS_NBITS_ON_LEVEL[lvl]);
-  auto block_len = VA_SPACING_PER_ENTRY[lvl];
+  auto offset = output_address_offest(lvl);
+  auto output_address = bits::Get(desc, offset, output_address_nbits(lvl));
+  auto block_len = va_spacing_per_entry(lvl);
 
   vaddr.val = bits::Clear(vaddr.val, 0, offset);
 
   return {{output_address}, block_len, vaddr, bit_cast<reg>(&desc)};
 }
 
-static constexpr void free_empty_descs(const DescriptorTable &root,
-                                       TraverseContext &ctx) {
+static constexpr void free_table_if_empty(const DescriptorTable &table,
+                                          TraverseContext &ctx) {
   if (ctx.free_empty_descs) {
     bool is_empty =
-        std::all_of(root.descs.begin(), root.descs.end(), [](auto desc) {
+        std::all_of(table.descs.begin(), table.descs.end(), [](auto desc) {
           return bits::Get(desc, DESCRIPTOR_VALID_OFFSET, 1) == 0;
         });
 
     if (is_empty) {
-      ctx.empty_descs[ctx.num_empty_descs] = bit_cast<u64>(&root);
+      ctx.empty_descs[ctx.num_empty_descs] = bit_cast<u64>(&table);
       ctx.num_empty_descs++;
     }
+  }
+}
+
+static constexpr auto move_vaddr_right(VirtualAddress vaddr, Level lvl)
+    -> VirtualAddress {
+  vaddr.val = bits::Clear(vaddr.val, 0, output_address_offest(lvl));
+  vaddr.val += va_spacing_per_entry(lvl);
+  return vaddr;
+}
+
+static constexpr auto LEVEL_NBITS = std::countr_one(MAX_TRANSLATION_LEVELS - 1);
+
+static auto form_desc_table_ptr(const DescriptorTable *table, Level lvl,
+                                u32 idx) -> reg {
+  auto desc_ptr = bit_cast<reg>(table);
+  bits::Clear(desc_ptr, 0, NEXT_LEVEL_DESC_OFFSET);
+  desc_ptr |=
+      bits::Get(lvl, 0, LEVEL_NBITS) |
+      (bits::Get(idx, 0, VIRTUAL_ADDRESS_LEVEL_IDX_BITS) << LEVEL_NBITS);
+
+  return desc_ptr;
+}
+
+static auto deform_desc_table_ptr(reg descs_ptr)
+    -> std::tuple<const DescriptorTable *, Level, u32> {
+  auto table = bit_cast<const DescriptorTable *>(
+      bits::Get(descs_ptr, NEXT_LEVEL_DESC_OFFSET, NEXT_LEVEL_DESC_NBITS));
+  auto lvl = bits::Get(descs_ptr, 0, LEVEL_NBITS);
+  auto idx =
+      bits::Get(descs_ptr, LEVEL_NBITS, VIRTUAL_ADDRESS_LEVEL_IDX_BITS) >>
+      LEVEL_NBITS;
+
+  return {table, lvl, idx};
+}
+
+static auto skip_invalid_entries(TraverseContext &ctx, VirtualAddress &vaddr,
+                                 const DescriptorTable *table, Level lvl,
+                                 u32 idx) -> u32 {
+  while (idx < NUM_TABLE_DESC_ENTRIES && vaddr.val < ctx.va_end.val) {
+    auto desc = table->descs[idx];
+    auto type = parse_descriptor(desc, lvl);
+
+    if (type != DescriptorType::INVALID) break;
+
+    vaddr = move_vaddr_right(vaddr, lvl);
+    idx++;
+  }
+
+  return idx;
+}
+
+// create 0th level and return it.
+static auto begin(TraverseContext &ctx, VirtualAddress &vaddr) -> reg {
+  const auto *table = bit_cast<const DescriptorTable *>(ctx.root_desc);
+  auto idx = get_index_for_level(vaddr, 0);
+
+  return form_desc_table_ptr(table, 0, idx);
+}
+
+static auto get(VirtualAddress vaddr, reg descs_ptr, VMMap &map) -> bool {
+  auto [table, lvl, idx] = deform_desc_table_ptr(descs_ptr);
+  auto &desc = table->descs[idx];
+  auto type = parse_descriptor(desc, lvl);
+
+  if (type == DescriptorType::TABLE || type == DescriptorType::INVALID)
+    return false;
+
+  map = create_vm_map(desc, lvl, vaddr);
+
+  return true;
+}
+
+using descs_stash_t = std::array<reg, 3>;
+
+static auto next(TraverseContext &ctx, reg descs_ptr, VirtualAddress &vaddr,
+                 descs_stash_t &stash) -> reg {
+  auto [table, lvl, idx] = deform_desc_table_ptr(descs_ptr);
+  idx = skip_invalid_entries(ctx, vaddr, table, lvl, idx);
+
+  if (vaddr.val >= ctx.va_end.val) return 0;
+
+  auto child_desc = table->descs[idx];
+  auto child_type = parse_descriptor(child_desc, lvl);
+
+  if (child_type == DescriptorType::TABLE) {
+    // stash us.
+    stash[lvl] = descs_ptr;
+
+    // Move down.
+    lvl += 1;
+    idx = get_index_for_level(vaddr, lvl);
+
+    auto child =
+        bits::Get(child_desc, NEXT_LEVEL_DESC_OFFSET, NEXT_LEVEL_DESC_NBITS);
+
+    return form_desc_table_ptr(bit_cast<const DescriptorTable *>(child), lvl,
+                               idx);
+  } else {
+    // Move both the desc_ptr and vaddr right.
+    idx += 1;
+    vaddr = move_vaddr_right(vaddr, lvl);
+    descs_ptr = form_desc_table_ptr(table, lvl, idx);
+
+    if (vaddr.val >= ctx.va_end.val) return 0;
+
+    if (idx == NUM_TABLE_DESC_ENTRIES) {
+      // Move up, until we find a parent.
+      while (lvl != 0) {
+        free_table_if_empty(*table, ctx);
+
+        auto [parent_table, parent_lvl, parent_idx] =
+            deform_desc_table_ptr(stash[lvl - 1]);
+
+        if (parent_idx + 1 < NUM_TABLE_DESC_ENTRIES)
+          return form_desc_table_ptr(parent_table, parent_lvl, parent_idx + 1);
+
+        // Fallen off the parent too.. Move up again.
+        lvl = parent_lvl;
+      }
+
+      return 0;
+    }
+
+    return descs_ptr;
   }
 }
 
 using yield_t = generator<VMMap>;
 
 static auto Traverse(std::allocator_arg_t,
-                     StackAllocator<yield_t::promise_type> alloc,
-                     TraverseContext &ctx, const DescriptorTable &root,
-                     VirtualAddress vaddr, Level lvl) -> yield_t {
-  if (lvl == NUM_LEVELS) {
-    ctx.has_error = true;
-    co_return;
+                     StackAllocator<yield_t::promise_type> /* alloc */,
+                     TraverseContext &ctx, VirtualAddress vaddr) -> yield_t {
+  auto descs_ptr = begin(ctx, vaddr);
+  descs_stash_t stash;
+
+  while (descs_ptr) {
+    VMMap map;
+
+    if (get(vaddr, descs_ptr, map)) co_yield map;
+
+    descs_ptr = next(ctx, descs_ptr, vaddr, stash);
   }
-
-  for (auto ind = get_index_for_level(vaddr, lvl);
-       ind < NUM_TABLE_DESC_ENTRIES && vaddr.val < ctx.va_end.val; ind++) {
-    const auto &desc = root.descs[ind];
-    auto type = parse_descriptor(desc, lvl);
-
-    switch (type) {
-      case DescriptorType::INVALID:
-        break;
-
-      case DescriptorType::TABLE: {
-        auto child =
-            bits::Get(desc, NEXT_LEVEL_DESC_OFFSET, NEXT_LEVEL_DESC_NBITS);
-
-        // Descend down.
-        auto gen =
-            Traverse(std::allocator_arg, alloc, ctx,
-                     *bit_cast<const DescriptorTable *>(child), vaddr, lvl + 1);
-        while (gen) {
-          co_yield gen();
-        }
-        break;
-      }
-
-      case DescriptorType::BLOCK:
-        if (lvl == 0 || lvl == 3) {
-          ctx.has_error = true;
-          co_return;
-        }
-
-        co_yield create_vm_map(desc, lvl, vaddr);
-        break;
-
-      case DescriptorType::PAGE:
-        if (lvl != 3) {
-          ctx.has_error = true;
-          co_return;
-        }
-
-        co_yield create_vm_map(desc, lvl, vaddr);
-        break;
-    }
-
-    // Move right
-    vaddr.val = bits::Clear(vaddr.val, 0, OUTPUT_ADDRESS_OFFSET_ON_LEVEL[lvl]);
-    vaddr.val += VA_SPACING_PER_ENTRY[lvl];
-  }
-
-  free_empty_descs(root, ctx);
 }
 
-#if USE_THREAD_LOCAL == 1
-static thread_local DefaultStackAllocator coro_alloc;
-#else
-static DefaultStackAllocator coro_alloc;
-#endif
-
 void BeginTraversal(TraverseContext &ctx) {
-  coro_alloc.used = 0;
+  static_assert(sizeof(DefaultStackAllocator) == sizeof(ctx.traverse_stack));
+
+  auto *coro_alloc =
+      reinterpret_cast<DefaultStackAllocator *>(ctx.traverse_stack.data());
+  coro_alloc->used = 0;
 
   StackAllocator<yield_t::promise_type> alloc{
-      bit_cast<DefaultStackAllocator *>(&coro_alloc)};
-
-  auto &root = *bit_cast<const DescriptorTable *>(ctx.root_desc);
+      bit_cast<DefaultStackAllocator *>(coro_alloc)};
 
   // Move the allocated generator into the rust provided stack space.
-  auto gen = Traverse(std::allocator_arg, alloc, ctx, root, ctx.va_start, 0);
+  auto gen = Traverse(std::allocator_arg, alloc, ctx, ctx.va_start);
   std::construct_at(bit_cast<yield_t *>(&ctx.gen), std::move(gen));
 }
 
-VMMap NextItem(TraverseContext &ctx) {
+auto NextItem(TraverseContext &ctx) -> VMMap {
   auto &gen = *bit_cast<yield_t *>(&ctx.gen);
   if (gen) [[likely]] {
     return gen();

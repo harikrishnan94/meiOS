@@ -14,9 +14,6 @@ fn main() -> Result<()> {
     let is_host = target_is_host().unwrap_or(true);
 
     choose_compiler(&mut cxx, is_host)?;
-    if is_host {
-        cxx.define("USE_THREAD_LOCAL", "1");
-    }
 
     cxx.file(ttt_cxx)
         .include(&out_dir)

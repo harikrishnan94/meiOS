@@ -10,7 +10,7 @@ struct VMMap;
 
 void BeginTraversal(TraverseContext &ctx);
 
-VMMap NextItem(TraverseContext &ctx);
+auto NextItem(TraverseContext &ctx) -> VMMap;
 
 void EndTraversal(TraverseContext &ctx);
 }  // namespace mmu::tt

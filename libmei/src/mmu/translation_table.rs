@@ -13,7 +13,7 @@ use core::{
     alloc::Layout,
     cell::UnsafeCell,
     cmp::{max, min},
-    mem::size_of,
+    mem::{size_of, MaybeUninit},
     ops::Range,
     ptr,
 };
@@ -546,6 +546,7 @@ impl Drop for TraverseIterator {
 
 impl TraverseIterator {
     fn new(root_desc: u64, va_rng: Range<VirtualAddress>, free_empty_descs: bool) -> Self {
+        let traverse_stack = MaybeUninit::<[u8; 200]>::uninit();
         let mut iter = Self {
             ctx: ffi::TraverseContext {
                 root_desc,
@@ -561,6 +562,7 @@ impl TraverseIterator {
                 num_empty_descs: 0,
                 empty_descs: Default::default(),
                 gen: ptr::null_mut(),
+                traverse_stack: unsafe { traverse_stack.assume_init() },
             },
         };
         ffi::BeginTraversal(&mut iter.ctx);
@@ -1015,6 +1017,7 @@ mod ffi {
         empty_descs: [u64; 4],
         /// C++ specific
         gen: *mut coro_generator_t,
+        traverse_stack: [u8; 200],
     }
 
     unsafe extern "C++" {
