@@ -104,7 +104,7 @@ static auto create_vm_map(const reg &desc, Level lvl, VirtualAddress vaddr)
 
   vaddr.val = bits::Clear(vaddr.val, 0, offset);
 
-  return {{output_address}, block_len, vaddr, bit_cast<reg>(&desc)};
+  return {{output_address}, block_len, vaddr, const_cast<reg *>(&desc)};
 }
 
 static constexpr void free_table_if_empty(const DescriptorTable &table,

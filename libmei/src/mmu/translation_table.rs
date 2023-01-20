@@ -28,7 +28,7 @@ use crate::{
     bug,
     error::{Error, Result},
     mmu::NEXT_LEVEL_TABLE_ADDR_SHIFT,
-    vm::{AccessPermissions, MemoryKind, MemoryMap, PhysicalPageAllocator},
+    vm::{AccessPermissions, MapDesc, MemoryKind, MemoryMap, PhysicalPageAllocator},
 };
 
 use super::{
@@ -389,6 +389,7 @@ pub struct PhysicalBlockOverlapInfo {
 
     /// Offest within the above `phy_block`, which ovelaps the provided VA space.
     overlap: Range<u32>,
+    desc_ptr: *mut u64,
 }
 
 impl PhysicalBlockOverlapInfo {
@@ -410,6 +411,7 @@ impl PhysicalBlockOverlapInfo {
             size: map.map_len as u32,
             overlap: (va_space_overlap_start - vaddr_start) as u32
                 ..(va_space_overlap_end - vaddr_start) as u32,
+            desc_ptr: map.desc_ptr,
         })
     }
 
@@ -433,8 +435,55 @@ impl PhysicalBlockOverlapInfo {
         (0..self.overlap.start, self.overlap.end..self.size)
     }
 
-    pub fn remove_overlapping_range() -> Result<()> {
-        todo!()
+    pub fn remove_overlapping_range<DescAlloc: PhysicalPageAllocator>(
+        &mut self,
+        tt: &TranslationTable,
+        desc_alloc: &DescAlloc,
+    ) -> Result<()> {
+        let ll_desc = Stage1LastLevelDescriptor::new(unsafe { *self.desc_ptr });
+
+        // Remove the existing mapping
+        unsafe { *self.desc_ptr = INVALID_DESCRIPTOR };
+
+        // Physical Block:
+        // [..........MMMM...........]
+        // [A         B  C          D]
+        // first_range = [A, B)
+        // overlapping_range = [B, C)
+        // last_range = [C, D)
+        let (first_rng, last_rng) = self.non_overlapping_range();
+
+        // Install the new ranges (Non-Overlapping)
+        if let Some(map) = self.create_memory_map(first_rng, &ll_desc) {
+            tt.map(&map, desc_alloc)?;
+        }
+        if let Some(map) = self.create_memory_map(last_rng, &ll_desc) {
+            tt.map(&map, desc_alloc)?;
+        }
+
+        Ok(())
+    }
+
+    fn create_memory_map(
+        &self,
+        rng: Range<u32>,
+        ll_desc: &Stage1LastLevelDescriptor,
+    ) -> Option<MemoryMap> {
+        let num_pages = (rng.end - rng.start) as usize / GRANULE_SIZE;
+        if num_pages == 0 {
+            return None;
+        }
+
+        let access_perms = parse_access_perms(ll_desc);
+        let paddr = self.phy_block + rng.start as usize;
+        let vaddr = self.vaddr + rng.start as usize;
+        let is_cacheable = !ll_desc.matches_all(STAGE1_LAST_LEVEL_DESCRIPTOR::SH::OuterShareable);
+        let map = MapDesc::new(paddr, vaddr, num_pages, access_perms);
+
+        Some(match is_cacheable {
+            true => MemoryMap::Normal(map),
+            false => MemoryMap::Device(map),
+        })
     }
 }
 
@@ -909,7 +958,7 @@ mod ffi {
         paddr: PhysicalAddress,
         map_len: usize,
         vaddr: VirtualAddress,
-        desc_ptr: u64,
+        desc_ptr: *mut u64,
     }
 
     #[derive(Debug, Copy, Clone)]
@@ -953,19 +1002,23 @@ impl From<ffi::VirtualAddress> for VirtualAddress {
     }
 }
 
-#[cfg(all(test, not(feature = "no_std")))]
+#[cfg(test)]
 mod tests {
     extern crate std;
 
     use core::{
         alloc::{AllocError, Allocator, Layout},
         cell::RefCell,
-        mem::{self, size_of},
+        mem::size_of,
         ptr::NonNull,
     };
-    use rand::{seq::SliceRandom, thread_rng, Rng};
+    use rand::{
+        distributions::{Distribution, Uniform},
+        seq::SliceRandom,
+        thread_rng, Rng,
+    };
     use rayon::prelude::*;
-    use std::{collections::HashMap, vec::Vec};
+    use std::{collections::HashMap, vec, vec::Vec};
 
     use crate::{
         address::{PhysicalAddress, VirtualAddress},
@@ -1155,6 +1208,60 @@ mod tests {
         }
     }
 
+    fn lookup_test_using_vaddr(vaddr: VirtualAddress) {
+        let page_alloc = TestAllocator::default();
+        let memory_maps = generate_memory_maps(vaddr);
+        let layout =
+            Layout::from_size_align(size_of::<DescriptorTable>(), TRANSLATION_TABLE_DESC_ALIGN)
+                .unwrap_or_else(|_| bug!("Descriptor Layout Mismatch"));
+        let translation_table = TranslationTable::new(&memory_maps, &page_alloc);
+
+        assert!(translation_table.is_ok());
+
+        let translation_table = translation_table.unwrap();
+        let mut rng = thread_rng();
+
+        for map in &memory_maps {
+            match map {
+                MemoryMap::Normal(desc) => {
+                    let vaddr = desc.virtual_address();
+                    let paddr = desc.physical_address();
+                    let map_size = desc.num_pages() * FOUR_KIB;
+                    let mut traversed_size = 0;
+                    let unmap_start = Uniform::from(0..desc.num_pages()).sample(&mut rng);
+                    let unmap_end =
+                        Uniform::from(unmap_start + 1..=desc.num_pages()).sample(&mut rng);
+                    let unmap_rng =
+                        vaddr + unmap_start * GRANULE_SIZE..vaddr + unmap_end * GRANULE_SIZE;
+
+                    for res in translation_table.traverse(unmap_rng.clone(), true) {
+                        match res {
+                            TraverseYield::PhysicalBlock(pbo_info) => {
+                                let pblock = pbo_info.phy_block();
+                                let overlap = pbo_info.overlapping_range();
+                                assert_eq!(
+                                    pblock.start + overlap.start as usize,
+                                    paddr + unmap_start * GRANULE_SIZE + traversed_size
+                                );
+                                assert_eq!(
+                                    pbo_info.vaddr() + overlap.start as usize,
+                                    vaddr + unmap_start * GRANULE_SIZE + traversed_size
+                                );
+                                traversed_size += (overlap.end - overlap.start) as usize;
+                            }
+                            TraverseYield::UnusedMemory(mem) => unsafe {
+                                page_alloc.deallocate(mem, layout)
+                            },
+                        }
+                    }
+
+                    assert_eq!(traversed_size, (unmap_rng.end - unmap_rng.start) as usize);
+                }
+                MemoryMap::Device(_) => assert!(false, "Failure"),
+            }
+        }
+    }
+
     fn mapping_scheme_test_using_vaddr(vaddr: VirtualAddress) {
         let page_alloc = TestAllocator::default();
         let memory_maps = generate_memory_maps(vaddr);
@@ -1215,6 +1322,15 @@ mod tests {
     }
 
     #[test]
+    fn lookup_sanity_test() {
+        let vaddr = get_random_virt_addr();
+
+        lookup_test_using_vaddr(vaddr + 1 * ONE_GIB);
+        lookup_test_using_vaddr(vaddr + 2 * TWO_MIB);
+        lookup_test_using_vaddr(vaddr + 3 * FOUR_KIB);
+    }
+
+    #[test]
     #[ignore]
     fn insert_long_test() {
         let vaddr = get_random_virt_addr();
@@ -1247,6 +1363,24 @@ mod tests {
 
         (0..NUM_TABLE_DESC_ENTRIES).into_par_iter().for_each(|i| {
             traverse_test_using_vaddr(vaddr + i * FOUR_KIB);
+        });
+    }
+
+    #[test]
+    #[ignore]
+    fn lookup_long_test() {
+        let vaddr = get_random_virt_addr();
+
+        (0..NUM_TABLE_DESC_ENTRIES).into_par_iter().for_each(|i| {
+            lookup_test_using_vaddr(vaddr + i * ONE_GIB);
+        });
+
+        (0..NUM_TABLE_DESC_ENTRIES).into_par_iter().for_each(|i| {
+            lookup_test_using_vaddr(vaddr + i * TWO_MIB);
+        });
+
+        (0..NUM_TABLE_DESC_ENTRIES).into_par_iter().for_each(|i| {
+            lookup_test_using_vaddr(vaddr + i * FOUR_KIB);
         });
     }
 }
