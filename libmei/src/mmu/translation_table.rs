@@ -417,6 +417,10 @@ impl PhysicalBlockOverlapInfo {
         self.phy_block..self.phy_block + self.size as usize
     }
 
+    pub fn vaddr(&self) -> VirtualAddress {
+        self.vaddr
+    }
+
     pub fn size(&self) -> usize {
         self.size as usize
     }
@@ -1134,6 +1138,7 @@ mod tests {
                         match res {
                             TraverseYield::PhysicalBlock(pbo_info) => {
                                 assert_eq!(pbo_info.phy_block().start, paddr + size);
+                                assert_eq!(pbo_info.vaddr(), vaddr + size);
                                 let overlap = pbo_info.phy_block();
                                 size += (overlap.end - overlap.start) as usize;
                             }
