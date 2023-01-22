@@ -13,10 +13,12 @@
                     "test",
                     "--no-run",
                     "--lib",
-                    "--manifest-path=${workspaceFolder}/libmei/Cargo.toml"
+                    "--manifest-path=${workspaceFolder}/libmei/Cargo.toml",
                 ],
-            },
-            "args": []
+                "env": {
+                    "RUSTFLAGS": "--cfg cxx_experimental_no_alloc"
+                }
+            }
         },
         {
             "type": "lldb",
