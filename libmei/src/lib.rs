@@ -3,11 +3,13 @@
     naked_functions,
     asm_const,
     const_trait_impl,
+    int_roundings,
+    alloc_layout_extra,
     allocator_api,
     strict_provenance,
-    slice_ptr_get
+    slice_ptr_get,
+    nonnull_slice_from_raw_parts
 )]
-#![cfg_attr(test, feature(nonnull_slice_from_raw_parts))]
 
 #[macro_use]
 extern crate lazy_static;
@@ -23,5 +25,4 @@ pub mod bug;
 pub mod error;
 pub mod mimo;
 pub mod mmu;
-pub mod static_bump_alloc;
 pub mod vm;

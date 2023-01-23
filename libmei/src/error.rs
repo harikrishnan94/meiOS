@@ -11,6 +11,8 @@ pub enum Error {
 
     PhysicalOOM,
     ContigiousPhysicalRangeUnavailable(u64),
+
+    AllocError,
 }
 
 impl core::fmt::Display for Error {
@@ -35,6 +37,8 @@ impl core::fmt::Display for Error {
                     "Contigious Physical Memory Range Unavailable for {num_pages} pages"
                 )
             }
+
+            Error::AllocError => write!(f, "Internal Allocation Error"),
         }
     }
 }
