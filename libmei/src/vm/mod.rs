@@ -23,6 +23,8 @@ use crate::address::{Address, PhysicalAddress, VirtualAddress};
 //  |                 +-------------------------------> [47:39] L0 index
 //  +-------------------------------------------------> [63] TTBR0/1
 
+mod buddy;
+
 lazy_static! {
     static ref EL1_VIRT_ADDRESS_BASE: VirtualAddress =
         VirtualAddress::new(0xFFFF_FFFF_0000_0000).unwrap();
