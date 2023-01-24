@@ -624,11 +624,10 @@ impl<'tt> TraverseIterator<'tt> {
     fn step(&mut self) -> Result<IterState> {
         assert!(!self.stash.is_empty());
 
-        let descs = self
+        let descs = *self
             .stash
             .last()
-            .unwrap_or_else(|| bug!("bug on load_block"))
-            .clone();
+            .unwrap_or_else(|| bug!("bug on load_block"));
         let level = AddressTranslationLevel::from(self.stash.len() - 1);
         let idx = self.va_space_explored.get_idx_for_level(&level);
 
@@ -652,11 +651,10 @@ impl<'tt> TraverseIterator<'tt> {
     fn move_right(&mut self) -> IterState {
         assert!(!self.stash.is_empty());
 
-        let descs = self
+        let descs = *self
             .stash
             .last()
-            .unwrap_or_else(|| bug!("bug on load_block"))
-            .clone();
+            .unwrap_or_else(|| bug!("bug on load_block"));
         let level = AddressTranslationLevel::from(self.stash.len() - 1);
         let idx = self.va_space_explored.get_idx_for_level(&level);
 
@@ -682,11 +680,10 @@ impl<'tt> TraverseIterator<'tt> {
 
         // Move up until, a valid entry can be found.
         while self.ascend() {
-            let parent = self
+            let parent = *self
                 .stash
                 .last()
-                .unwrap_or_else(|| bug!("bug on load_block"))
-                .clone();
+                .unwrap_or_else(|| bug!("bug on load_block"));
             let parent_level = AddressTranslationLevel::from(self.stash.len() - 1);
             let parent_idx = self.va_space_explored.get_idx_for_level(&parent_level);
 
@@ -719,11 +716,10 @@ impl<'tt> TraverseIterator<'tt> {
     }
 
     fn load_block(&self) -> Option<PhysicalBlockOverlapInfo<'tt>> {
-        let descs = self
+        let descs = *self
             .stash
             .last()
-            .unwrap_or_else(|| bug!("bug on load_block"))
-            .clone();
+            .unwrap_or_else(|| bug!("bug on load_block"));
         let level = AddressTranslationLevel::from(self.stash.len() - 1);
         let idx = self.va_space_explored.get_idx_for_level(&level);
 
@@ -1251,6 +1247,7 @@ fn load_desc(descs: &DescriptorTable, idx: usize) -> u64 {
     unsafe { (*descs.0.get())[idx] }
 }
 
+#[allow(clippy::mut_from_ref)]
 fn load_desc_mut(descs: &DescriptorTable, idx: usize) -> &mut u64 {
     unsafe { &mut (*descs.0.get())[idx] }
 }
