@@ -1651,67 +1651,11 @@ mod tests {
 
     #[test]
     fn remove_sanity_test() {
-        // let vaddr = get_random_virt_addr();
+        let vaddr = get_random_virt_addr();
 
-        // remove_test_using_vaddr(vaddr + 1 * ONE_GIB);
-        // remove_test_using_vaddr(vaddr + 2 * TWO_MIB);
-        // remove_test_using_vaddr(vaddr + 3 * FOUR_KIB);
-
-        let page_alloc = TestAllocator::default();
-        let memory_maps = vec![MemoryMap::Normal(MapDesc::new(
-            PhysicalAddress::new(32229031936),
-            VirtualAddress::new(205722300186624).unwrap(),
-            512,
-            AccessPermissions::normal_memory_default(),
-        ))];
-        let layout =
-            Layout::from_size_align(size_of::<DescriptorTable>(), TRANSLATION_TABLE_DESC_ALIGN)
-                .unwrap_or_else(|_| bug!("Descriptor Layout Mismatch"));
-        let translation_table = TranslationTable::new(&memory_maps, &page_alloc);
-
-        assert!(translation_table.is_ok());
-
-        let translation_table = translation_table.unwrap();
-        let mut rng = thread_rng();
-
-        for map in &memory_maps {
-            match map {
-                MemoryMap::Normal(desc) => {
-                    let vaddr = desc.virtual_address();
-                    let unmap_start = Uniform::from(0..desc.num_pages()).sample(&mut rng);
-                    let unmap_end =
-                        Uniform::from(unmap_start + 1..=desc.num_pages()).sample(&mut rng);
-                    let unmap_rng =
-                        vaddr + unmap_start * GRANULE_SIZE..vaddr + unmap_end * GRANULE_SIZE;
-                    let mut traversed_size = 0;
-
-                    for res in translation_table.traverse(unmap_rng.clone(), true) {
-                        assert!(res.is_ok());
-
-                        match res.unwrap() {
-                            TraverseYield::PhysicalBlock(mut pbo_info) => {
-                                let overlap = pbo_info.overlapping_range();
-                                traversed_size += (overlap.end - overlap.start) as usize;
-
-                                let remove = pbo_info
-                                    .remove_overlapping_range(&translation_table, &page_alloc);
-                                assert!(remove.is_ok());
-                            }
-                            TraverseYield::UnusedMemory(mem) => unsafe {
-                                page_alloc.deallocate(mem, layout)
-                            },
-                        }
-                    }
-
-                    assert_eq!(traversed_size, (unmap_rng.end - unmap_rng.start) as usize);
-
-                    let count_after_removal =
-                        translation_table.traverse(unmap_rng.clone(), true).count();
-                    assert_eq!(count_after_removal, 0);
-                }
-                MemoryMap::Device(_) => assert!(false, "Failure"),
-            }
-        }
+        remove_test_using_vaddr(vaddr + 1 * ONE_GIB);
+        remove_test_using_vaddr(vaddr + 2 * TWO_MIB);
+        remove_test_using_vaddr(vaddr + 3 * FOUR_KIB);
     }
 
     #[test]
