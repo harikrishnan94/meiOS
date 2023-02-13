@@ -1,0 +1,13 @@
+[package]
+name = "macros"
+version = "0.0.1"
+edition = "2021"
+authors = ["Harikrishnan <harikrishnan.prabakaran@gmail.com>"]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1.x"
+quote = "1.x"
+syn = { version = "1.x", features = ["full"] }
