@@ -1,2 +1,0 @@
-[build]
-rustflags = ["--cfg", "cxx_experimental_no_alloc"]
