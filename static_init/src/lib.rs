@@ -26,24 +26,27 @@ impl<T: Sync> StaticInitialized<T> {
         }
     }
 
+    #[inline(always)]
     pub fn get(&self) -> &T {
-        self.init();
+        if unlikely(!self.is_initialized.load(Ordering::Relaxed)) {
+            self.init();
+        }
         unsafe { (*self.data.get()).assume_init_ref() }
     }
 
+    #[inline(never)]
     pub fn init(&self) {
-        if unlikely(!self.is_initialized.load(Ordering::Relaxed)) {
-            unsafe {
-                (*self.data.get()).as_mut_ptr().write((self.initializer)());
-            }
-            self.is_initialized.store(true, Ordering::Relaxed);
+        unsafe {
+            (*self.data.get()).as_mut_ptr().write((self.initializer)());
         }
+        self.is_initialized.store(true, Ordering::Relaxed);
     }
 }
 
 impl<T: Sync> core::ops::Deref for StaticInitialized<T> {
     type Target = T;
 
+    #[inline(always)]
     fn deref(&self) -> &T {
         self.get()
     }
