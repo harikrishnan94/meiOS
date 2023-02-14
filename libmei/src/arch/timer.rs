@@ -1,6 +1,7 @@
 use core::time::Duration;
 
 use aarch64_cpu::registers::{CNTP_CTL_EL0, CNTP_TVAL_EL0};
+use macros::ctor;
 use spin::Mutex;
 use tock_registers::interfaces::Writeable;
 
@@ -20,9 +21,9 @@ static TIMER_FREQ: u64 = 0;
 const TIMER_INTERVAL: Duration = Duration::from_millis(10);
 const TICKS_PER_SECOND: u64 =
     (Duration::from_secs(1).as_nanos() / TIMER_INTERVAL.as_nanos()) as u64;
-lazy_static! {
-    static ref TIMER_INTERVAL_CNT: u64 = compute_timer_counter_value(TIMER_INTERVAL);
-}
+
+#[ctor]
+static TIMER_INTERVAL_CNT: u64 = compute_timer_counter_value(TIMER_INTERVAL);
 
 fn compute_timer_counter_value(duration: core::time::Duration) -> u64 {
     let freq = unsafe { core::ptr::read_volatile(&TIMER_FREQ) } as f64;
@@ -64,9 +65,8 @@ impl IRQHandler for TimerInterruptHandler {
     }
 }
 
-lazy_static! {
-    static ref IRQ_HANDLER: TimerInterruptHandler = TimerInterruptHandler::default();
-}
+#[ctor]
+static IRQ_HANDLER: TimerInterruptHandler = TimerInterruptHandler::default();
 
 /// .
 ///

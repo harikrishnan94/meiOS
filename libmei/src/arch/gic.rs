@@ -1,4 +1,5 @@
 use aarch64_cpu::registers::CNTP_CTL_EL0;
+use macros::ctor;
 use spin::mutex::Mutex;
 use tock_registers::interfaces::Readable;
 
@@ -39,10 +40,9 @@ impl<'a> IRQHandlerEntry<'a> {
     }
 }
 
-lazy_static! {
-    static ref REGISTERED_IRQ_HANDLERS: Mutex<[IRQHandlerEntry<'static>; MAX_IRQ_NUM as usize]> =
-        Mutex::new([IRQHandlerEntry::default(); MAX_IRQ_NUM as usize]);
-}
+#[ctor]
+static REGISTERED_IRQ_HANDLERS: Mutex<[IRQHandlerEntry<'static>; MAX_IRQ_NUM as usize]> =
+    Mutex::new([IRQHandlerEntry::default(); MAX_IRQ_NUM as usize]);
 
 /// .
 ///

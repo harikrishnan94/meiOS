@@ -1,6 +1,3 @@
-#![macro_use]
-extern crate macros;
-
 use aarch64_cpu::registers::*;
 use core::{
     arch::{asm, global_asm},

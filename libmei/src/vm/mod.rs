@@ -1,4 +1,5 @@
 use crate::address::{Address, PhysicalAddress, VirtualAddress};
+use macros::ctor;
 
 // From https://lwn.net/Articles/718895/
 //
@@ -25,16 +26,14 @@ use crate::address::{Address, PhysicalAddress, VirtualAddress};
 
 mod buddy;
 
-lazy_static! {
-    static ref EL1_VIRT_ADDRESS_BASE: VirtualAddress =
-        VirtualAddress::new(0xFFFF_FFFF_0000_0000).unwrap();
-    static ref EL0_VIRT_ADDRESS_BASE: VirtualAddress =
-        VirtualAddress::new(0x0000_0000_0000_0000).unwrap();
-}
+#[ctor]
+static EL1_VIRT_ADDRESS_BASE: VirtualAddress = VirtualAddress::new(0xFFFF_FFFF_0000_0000).unwrap();
+#[ctor]
+static EL0_VIRT_ADDRESS_BASE: VirtualAddress = VirtualAddress::new(0x0000_0000_0000_0000).unwrap();
 
 /// Works only for statically mapped physical addresses
 pub fn phy2virt(paddr: PhysicalAddress) -> VirtualAddress {
-    *EL1_VIRT_ADDRESS_BASE + paddr.as_raw_ptr()
+    *EL0_VIRT_ADDRESS_BASE + paddr.as_raw_ptr()
 }
 
 pub trait PhysicalPageAllocator: core::alloc::Allocator {}

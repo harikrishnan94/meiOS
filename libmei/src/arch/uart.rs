@@ -1,4 +1,5 @@
 use core::fmt::Write;
+use macros::ctor;
 use tock_registers::interfaces::{Readable, Writeable};
 use tock_registers::registers::{ReadOnly, ReadWrite, WriteOnly};
 use tock_registers::{register_bitfields, register_structs};
@@ -86,9 +87,8 @@ impl Pl011Uart {
     }
 }
 
-lazy_static! {
-    static ref IRQ_HANDLER: UARTAccessor = UARTAccessor::default().unwrap();
-}
+#[ctor]
+static IRQ_HANDLER: UARTAccessor = UARTAccessor::default().unwrap();
 
 struct UARTAccessor {
     uart: spin::Mutex<Pl011Uart>,

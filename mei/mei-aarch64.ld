@@ -14,12 +14,15 @@ ENTRY(_start)
  */
 PHDRS
 {
-    segment_code            PT_LOAD FLAGS(5);
-    segment_data            PT_LOAD FLAGS(6);
+    text    PT_LOAD FLAGS(5);
+    rodata  PT_LOAD FLAGS(4);
+    data    PT_LOAD FLAGS(6);
+    bss     PT_LOAD FLAGS(6);
 }
 
 SECTIONS
 {
+    /* Starts at LOADER_ADDR. */
     . = binary_load_addr;
 
     /* Used to identify the size of kernel image */
@@ -32,28 +35,50 @@ SECTIONS
     {
         KEEP(*(.text.boot))
         *(.text)
-    }
-    . = ALIGN(page_size);
+    } :text
 
+    .init :
+    {
+        KEEP(*(.init))
+        KEEP(*(.fini))
+    }
+
+    /* Include the list of initialization functions sorted. */
+    .init.array :
+    {
+        __init_array_start = .;
+        *(.init_array)
+        *(.init_array.*)
+        __init_array_end = .;
+    }
+    __text_end = .;
+    . = ALIGN(page_size); /* align to page size */
+
+    __rodata_start = .;
     .rodata :
     {
         *(.rodata)
-    }
-    . = ALIGN(page_size);
+    } :rodata
+    __rodata_end = .;
+    . = ALIGN(page_size); /* align to page size */
 
+    __data_start = .;
     .data :
     {
         *(.data)
-    }
-    . = ALIGN(page_size);
+    } :data
+    __data_end = .;
+    . = ALIGN(page_size); /* align to page size */
 
+    __bss_start = .;
     .bss :
     {
-        __bss_start = .;
+        bss = .;
         *(.bss)
-        __bss_end = .;
-    }
-    . = ALIGN(page_size);
+    } :bss
+    __bss_end = .;
+    __bss_size = __bss_end - __bss_start;
+    . = ALIGN(page_size); /* align to page size */
 
     /* Used to identify the size of kernel image */
     __kernel_end_marker = .;

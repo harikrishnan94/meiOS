@@ -180,3 +180,238 @@ pub fn derive_address_ops(item: TokenStream) -> TokenStream {
 
     gen.into()
 }
+
+/// Attributes required to mark a function as a constructor. This may be exposed in the future if we determine
+/// it to be stable.
+#[doc(hidden)]
+macro_rules! ctor_attributes {
+    () => {
+        quote!(
+            #[cfg_attr(any(target_os = "none", target_os = "linux", target_os = "android"), link_section = ".init_array")]
+            #[cfg_attr(target_os = "freebsd", link_section = ".init_array")]
+            #[cfg_attr(target_os = "netbsd", link_section = ".init_array")]
+            #[cfg_attr(target_os = "openbsd", link_section = ".init_array")]
+            #[cfg_attr(target_os = "dragonfly", link_section = ".init_array")]
+            #[cfg_attr(target_os = "illumos", link_section = ".init_array")]
+            #[cfg_attr(target_os = "haiku", link_section = ".init_array")]
+            #[cfg_attr(any(target_os = "macos", target_os = "ios"), link_section = "__DATA,__mod_init_func")]
+            #[cfg_attr(windows, link_section = ".CRT$XCU")]
+        )
+    };
+}
+
+/// Marks a function or static variable as a library/executable constructor.
+/// This uses OS-specific linker sections to call a specific function at
+/// load time.
+///
+/// Multiple startup functions/statics are supported, but the invocation order is not
+/// guaranteed.
+///
+/// # Examples
+///
+/// Print a startup message (using `libc_print` for safety):
+///
+/// ```rust
+/// # extern crate ctor;
+/// # use ctor::*;
+/// use libc_print::std_name::println;
+///
+/// #[ctor]
+/// fn foo() {
+///   println!("Hello, world!");
+/// }
+///
+/// # fn main() {
+/// println!("main()");
+/// # }
+/// ```
+///
+/// Make changes to `static` variables:
+///
+/// ```rust
+/// # extern crate ctor;
+/// # use ctor::*;
+/// # use std::sync::atomic::{AtomicBool, Ordering};
+/// static INITED: AtomicBool = AtomicBool::new(false);
+///
+/// #[ctor]
+/// fn foo() {
+///   INITED.store(true, Ordering::SeqCst);
+/// }
+/// ```
+///
+/// Initialize a `HashMap` at startup time:
+///
+/// ```rust
+/// # extern crate ctor;
+/// # use std::collections::HashMap;
+/// # use ctor::*;
+/// #[ctor]
+/// static STATIC_CTOR: HashMap<u32, String> = {
+///   let mut m = HashMap::new();
+///   for i in 0..100 {
+///     m.insert(i, format!("x*100={}", i*100));
+///   }
+///   m
+/// };
+///
+/// # pub fn main() {
+/// #   assert_eq!(STATIC_CTOR.len(), 100);
+/// #   assert_eq!(STATIC_CTOR[&20], "x*100=2000");
+/// # }
+/// ```
+///
+/// # Details
+///
+/// The `#[ctor]` macro makes use of linker sections to ensure that a
+/// function is run at startup time.
+///
+/// The above example translates into the following Rust code (approximately):
+///
+///```rust
+/// #[used]
+/// #[cfg_attr(any(target_os = "none", target_os = "linux", target_os = "android"), link_section = ".init_array")]
+/// #[cfg_attr(target_os = "freebsd", link_section = ".init_array")]
+/// #[cfg_attr(target_os = "netbsd", link_section = ".init_array")]
+/// #[cfg_attr(target_os = "openbsd", link_section = ".init_array")]
+/// #[cfg_attr(target_os = "illumos", link_section = ".init_array")]
+/// #[cfg_attr(any(target_os = "macos", target_os = "ios"), link_section = "__DATA,__mod_init_func")]
+/// #[cfg_attr(target_os = "windows", link_section = ".CRT$XCU")]
+/// static FOO: extern fn() = {
+///   #[cfg_attr(any(target_os = "linux", target_os = "android"), link_section = ".init")]
+///   extern fn foo() { /* ... */ };
+///   foo
+/// };
+/// ```
+#[proc_macro_attribute]
+pub fn ctor(_attribute: TokenStream, function: TokenStream) -> TokenStream {
+    let item: syn::Item = syn::parse_macro_input!(function);
+    if let syn::Item::Fn(function) = item {
+        validate_item("ctor", &function);
+
+        let syn::ItemFn {
+            attrs,
+            block,
+            vis,
+            sig:
+                syn::Signature {
+                    ident,
+                    unsafety,
+                    constness,
+                    abi,
+                    ..
+                },
+            ..
+        } = function;
+
+        // Linux/ELF: https://www.exploit-db.com/papers/13234
+
+        let ctor_ident =
+            syn::parse_str::<syn::Ident>(format!("{ident}___rust_ctor___ctor").as_ref())
+                .expect("Unable to create identifier");
+
+        let tokens = ctor_attributes!();
+        let output = quote!(
+            #[cfg(not(any(target_os = "none", target_os = "linux", target_os = "android", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd", target_os = "dragonfly", target_os = "illumos", target_os = "haiku", target_os = "macos", target_os = "ios", windows)))]
+            compile_error!("#[ctor] is not supported on the current target");
+
+            #(#attrs)*
+            #vis #unsafety extern #abi #constness fn #ident() #block
+
+            #[used]
+            #[allow(non_upper_case_globals)]
+            #[doc(hidden)]
+            #tokens
+            static #ctor_ident
+            :
+            unsafe extern "C" fn() =
+            {
+                #[cfg_attr(any(target_os = "none", target_os = "linux", target_os = "android"), link_section = ".init")]
+                unsafe extern "C" fn #ctor_ident() { #ident() };
+                #ctor_ident
+            }
+            ;
+        );
+
+        // eprintln!("{}", output);
+
+        output.into()
+    } else if let syn::Item::Static(var) = item {
+        let syn::ItemStatic {
+            ident,
+            mutability,
+            expr,
+            attrs,
+            ty,
+            vis,
+            ..
+        } = var;
+
+        if mutability.is_some() {
+            panic!("#[ctor]-annotated static objects must not be mutable");
+        }
+
+        if attrs.iter().any(|attr| {
+            attr.path
+                .segments
+                .iter()
+                .any(|segment| segment.ident == "no_mangle")
+        }) {
+            panic!("#[ctor]-annotated static objects do not support #[no_mangle]");
+        }
+
+        let ctor_ident =
+            syn::parse_str::<syn::Ident>(format!("{ident}___rust_ctor___ctor").as_ref())
+                .expect("Unable to create identifier");
+
+        let tokens = ctor_attributes!();
+        let output = quote!(
+            #[cfg(not(any(target_os = "none", target_os = "linux", target_os = "android", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd", target_os = "dragonfly", target_os = "illumos", target_os = "haiku", target_os = "macos", target_os = "ios", windows)))]
+            compile_error!("#[ctor] is not supported on the current target");
+
+            #(#attrs)*
+            #vis static #ident: static_init::StaticInitialized<#ty> = static_init::StaticInitialized::new(|| {
+                #expr
+            });
+
+            #[used]
+            #[allow(non_upper_case_globals)]
+            #tokens
+            static #ctor_ident
+            :
+            unsafe extern "C" fn() = {
+                #[cfg_attr(any(target_os = "none", target_os = "linux", target_os = "android"), link_section = ".init")]
+                unsafe extern "C" fn initer() {
+                    (#ident).init();
+                }; initer }
+            ;
+        );
+
+        // eprintln!("{output}");
+
+        output.into()
+    } else {
+        panic!("#[ctor] items must be functions or static globals");
+    }
+}
+
+fn validate_item(typ: &str, item: &syn::ItemFn) {
+    let syn::ItemFn { vis, sig, .. } = item;
+
+    // Ensure that visibility modifier is not present
+    match vis {
+        syn::Visibility::Inherited => {}
+        _ => panic!("#[{typ}] methods must not have visibility modifiers"),
+    }
+
+    // No parameters allowed
+    if !sig.inputs.is_empty() {
+        panic!("#[{typ}] methods may not have parameters");
+    }
+
+    // No return type allowed
+    match sig.output {
+        syn::ReturnType::Default => {}
+        _ => panic!("#[{typ}] methods must not have return types"),
+    }
+}
