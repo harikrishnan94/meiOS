@@ -10,6 +10,7 @@ no_std = []
 [dependencies]
 macros = { path = "../macros" }
 static_init = { path = "../static_init" }
+static_assertions = "1.1.0"
 tock-registers = "0.8.1"
 spin = "0.9.4"
 qemu-exit = "3.0.1"

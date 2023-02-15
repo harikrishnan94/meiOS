@@ -2,7 +2,7 @@
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, DeriveInput, ItemFn};
+use syn::{parse_macro_input, AttributeArgs, DeriveInput, ItemFn};
 
 #[proc_macro_attribute]
 pub fn exception_handler(_attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -204,8 +204,10 @@ macro_rules! ctor_attributes {
 /// This uses OS-specific linker sections to call a specific function at
 /// load time.
 ///
-/// Multiple startup functions/statics are supported, but the invocation order is not
-/// guaranteed.
+/// Multiple startup functions/statics are supported, invocation order is not guaranteed.
+/// But dependant variables are initialized earlier.
+/// Constructor priority is supported (0..=4) and higher priority initializer may not depend
+/// on a lower priority initializer (panics on failure). Though, vice-versa is correct.
 ///
 /// # Examples
 ///
@@ -284,8 +286,28 @@ macro_rules! ctor_attributes {
 /// };
 /// ```
 #[proc_macro_attribute]
-pub fn ctor(_attribute: TokenStream, function: TokenStream) -> TokenStream {
+pub fn ctor(args: TokenStream, function: TokenStream) -> TokenStream {
     let item: syn::Item = syn::parse_macro_input!(function);
+    let priority = parse_macro_input!(args as AttributeArgs);
+    let priority: u8 = if priority.is_empty() {
+        0
+    } else if priority.len() == 1 {
+        let priority = &priority[0];
+        match priority {
+            syn::NestedMeta::Meta(_) => {
+                return quote!(compile_error!("#[ctor] priority must be an integer");).into()
+            }
+            syn::NestedMeta::Lit(lit) => match lit {
+                syn::Lit::Int(ilit) => ilit
+                    .base10_parse()
+                    .expect("#[ctor] priority must be an integer"),
+                _ => return quote!(compile_error!("#[ctor] priority must be an integer");).into(),
+            },
+        }
+    } else {
+        return quote!(compile_error!("#[ctor] must have exactly one priority attribute");).into();
+    };
+
     if let syn::Item::Fn(function) = item {
         validate_item("ctor", &function);
 
@@ -318,6 +340,8 @@ pub fn ctor(_attribute: TokenStream, function: TokenStream) -> TokenStream {
             #(#attrs)*
             #vis #unsafety extern #abi #constness fn #ident() #block
 
+            static_assertions::const_assert!(#priority <= static_init::MAX_INIT_PRIORITY);
+
             #[used]
             #[allow(non_upper_case_globals)]
             #[doc(hidden)]
@@ -327,7 +351,11 @@ pub fn ctor(_attribute: TokenStream, function: TokenStream) -> TokenStream {
             unsafe extern "C" fn() =
             {
                 #[cfg_attr(any(target_os = "none", target_os = "linux", target_os = "android"), link_section = ".init")]
-                unsafe extern "C" fn #ctor_ident() { #ident() };
+                unsafe extern "C" fn #ctor_ident() {
+                    if static_init::CURRENT_INIT_PRIORITY.load(core::sync::atomic::Ordering::Relaxed) == #priority  {
+                        #ident();
+                    }
+                };
                 #ctor_ident
             }
             ;
@@ -372,7 +400,10 @@ pub fn ctor(_attribute: TokenStream, function: TokenStream) -> TokenStream {
             #(#attrs)*
             #vis static #ident: static_init::StaticInitialized<#ty> = static_init::StaticInitialized::new(|| {
                 #expr
-            });
+            },
+            #priority);
+
+            static_assertions::const_assert!(#priority <= static_init::MAX_INIT_PRIORITY);
 
             #[used]
             #[allow(non_upper_case_globals)]
