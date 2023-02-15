@@ -1,5 +1,5 @@
 use aarch64_cpu::registers::*;
-use core::arch::global_asm;
+use core::{arch::global_asm, ptr::slice_from_raw_parts, sync::atomic::Ordering};
 use tock_registers::interfaces::Writeable;
 
 global_asm!(
@@ -7,8 +7,33 @@ global_asm!(
     CPUID_MASK = const ((1 << 2) - 1), /* MPIDR_EL1's last 2 bits contain the current cpu */
     BOOT_CORE_ID = const 0,
     EL_BITS_OFFSET = const 2, /* CurrentEL's 2:3 contains the exception level */
-    HYP_MODE_EL = const 2 /* Hypervisor mode EL is 2 */
+    HYP_MODE_EL = const 2, /* Hypervisor mode EL is 2 */
 );
+
+/// Called by ASM (boot.s) to initialize static variables with static initializers
+/// and static constructors.
+///
+/// # Safety
+///
+/// Must be called exactly once and before entering Rust code.
+#[no_mangle]
+pub unsafe extern "C" fn call_static_initializers(
+    init_array_start: *const fn(),
+    init_array_end: *const fn(),
+) {
+    for cur_prio_lvl in 0..=static_init::MAX_INIT_PRIORITY {
+        static_init::CURRENT_INIT_PRIORITY.store(cur_prio_lvl, Ordering::Relaxed);
+
+        let initializers = &*slice_from_raw_parts(
+            init_array_start,
+            init_array_end.offset_from(init_array_start) as usize,
+        );
+
+        for initializer in initializers {
+            initializer();
+        }
+    }
+}
 
 /// Prepares the transition from EL2 to EL1.
 ///

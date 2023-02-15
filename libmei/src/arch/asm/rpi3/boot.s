@@ -45,17 +45,10 @@ _start:
     ldr x0, =_start
     mov sp, x0
 
-    /* Call static constructors */
-    adr x19, __init_array_start /* Provided by Linker */
-    adr x20, __init_array_end /* Provided by Linker */
-    cmp x19, x20
-    bge 6f
-5:
-    ldr x0, [x19]
-    blr x0
-    add x19, x19, #8
-    cmp x19, x20
-    bne 5b
+    /* Call static constructors and initializers */
+    adr x0, __init_array_start /* Provided by Linker */
+    adr x1, __init_array_end /* Provided by Linker */
+    bl call_static_initializers
 
 6:
     /* Jump to Rust code. x0 and x1 holds the function argument provided to _start_rust(). */
