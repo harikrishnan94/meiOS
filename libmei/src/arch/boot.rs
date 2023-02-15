@@ -7,7 +7,7 @@ global_asm!(
     CPUID_MASK = const ((1 << 2) - 1), /* MPIDR_EL1's last 2 bits contain the current cpu */
     BOOT_CORE_ID = const 0,
     EL_BITS_OFFSET = const 2, /* CurrentEL's 2:3 contains the exception level */
-    HYP_MODE_EL = const 2, /* Hypervisor mode EL is 2 */
+    HYP_MODE_EL = const 2 /* Hypervisor mode EL is 2 */
 );
 
 /// Called by ASM (boot.s) to initialize static variables with static initializers
