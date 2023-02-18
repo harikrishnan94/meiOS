@@ -20,6 +20,7 @@ heapless = "0.7.16"
 intrusive-collections = { version = "0.9.4", default-features = false, features = [
     "nightly",
 ] }
+modular-bitfield = "0.11.2"
 
 [dev-dependencies]
 rand = { version = "0.8.5", features = ["std"] }

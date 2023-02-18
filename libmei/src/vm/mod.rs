@@ -24,7 +24,9 @@ use macros::ctor;
 //  |                 +-------------------------------> [47:39] L0 index
 //  +-------------------------------------------------> [63] TTBR0/1
 
+mod alloc;
 mod buddy;
+mod slab;
 
 #[ctor]
 static EL1_VIRT_ADDRESS_BASE: VirtualAddress = VirtualAddress::new(0xFFFF_FFFF_0000_0000).unwrap();

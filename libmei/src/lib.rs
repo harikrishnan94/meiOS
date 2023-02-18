@@ -13,6 +13,7 @@
 
 #[macro_use]
 extern crate bitflags;
+extern crate alloc;
 
 #[cfg(feature = "no_std")]
 pub mod arch;

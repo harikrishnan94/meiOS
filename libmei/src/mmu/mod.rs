@@ -26,8 +26,8 @@ pub const LEVEL_2_OUTPUT_ADDR_SHIFT: u32 = OUTPUT_ADDR_BITS - LEVEL_2_OUTPUT_ADD
 pub const LEVEL_3_OUTPUT_ADDR_BITS: u32 = 36;
 pub const LEVEL_3_OUTPUT_ADDR_SHIFT: u32 = OUTPUT_ADDR_BITS - LEVEL_3_OUTPUT_ADDR_BITS;
 
-mod translation_table;
-mod utils;
+pub(crate) mod translation_table;
+pub(crate) mod utils;
 
 /// Setup all registers before enabling MMU
 /// Also return the value to be written to SCTLR_EL1 for enabling MMU.
