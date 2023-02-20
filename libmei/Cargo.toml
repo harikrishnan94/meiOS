@@ -8,6 +8,7 @@ authors = ["Harikrishnan <harikrishnan.prabakaran@gmail.com>"]
 no_std = []
 
 [dependencies]
+cxx = { version = "1.0.58", default-features = false }
 macros = { path = "../macros" }
 static_init = { path = "../static_init" }
 static_assertions = "1.1.0"
@@ -22,6 +23,13 @@ intrusive-collections = { version = "0.9.4", default-features = false, features 
 ] }
 modular-bitfield = "0.11.2"
 
+[build-dependencies]
+cxx-build = "1.0"
+cc = "1.0"
+
 [dev-dependencies]
 rand = { version = "0.8.5", features = ["std"] }
 rayon = "1.6.1"
+
+[patch.crates-io]
+link-cplusplus = { path = "../link-cplusplus" }

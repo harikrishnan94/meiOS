@@ -21,3 +21,6 @@ cargo-binutils = "0.3.6"
 [profile.release]
 strip = true # Automatically strip symbols from the binary.
 lto = true
+
+[patch.crates-io]
+link-cplusplus = { path = "../link-cplusplus" }
