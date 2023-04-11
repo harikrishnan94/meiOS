@@ -7,15 +7,26 @@
     },
     "configurePresets": [
         {
-            "name": "default",
-            "displayName": "Default",
+            "name": "default-host",
+            "displayName": "Default config for Host",
             "description": "Default build using Ninja generator",
             "generator": "Ninja",
             "binaryDir": "${sourceDir}/out/build/${presetName}",
             "installDir": "${sourceDir}/out/install/${presetName}",
+            "cacheVariables": {
+                "CMAKE_EXPORT_COMPILE_COMMANDS": true
+            }
+        },
+        {
+            "name": "default",
+            "displayName": "Default",
+            "description": "Default build using Ninja generator",
+            "inherits": "default-host",
             "toolchainFile": "${workspaceFolder}/cmake/aarch64-none-elf-toolchain.cmake",
             "cacheVariables": {
                 "CMAKE_EXPORT_COMPILE_COMMANDS": true,
+                "KTL_ENABLE_TESTS": false,
+                "MEI_ENABLE_TESTS": false,
                 "MEI_RASPI_BOARD": "raspi3"
             }
         },
@@ -25,7 +36,37 @@
             "description": "Debug",
             "inherits": "default",
             "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Debug"
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_CXX_FLAGS": "-DENABLE_ASSERT=1"
+            }
+        },
+        {
+            "name": "san",
+            "displayName": "Sanitizer",
+            "description": "Undefined behavior Sanitizer enabled",
+            "inherits": "debug",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_CXX_FLAGS": "-fsanitize=undefined"
+            }
+        },
+        {
+            "name": "reldebinfo",
+            "displayName": "ReleaseWithDebInfo",
+            "description": "ReleaseWithDebInfo",
+            "inherits": "default",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+            }
+        },
+        {
+            "name": "relwithchecks",
+            "displayName": "ReleaseWithChecks",
+            "description": "ReleaseWithChecks",
+            "inherits": "default",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "KTL_ENABLE_CHECKS": "On"
             }
         },
         {
@@ -34,7 +75,51 @@
             "description": "Release",
             "inherits": "default",
             "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        },
+        {
+            "name": "minrelease",
+            "displayName": "MinSizeRel",
+            "description": "Release with minimum size optimization",
+            "inherits": "default",
+            "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "MinSizeRel"
+            }
+        },
+        {
+            "name": "coretests",
+            "displayName": "CoreTests",
+            "description": "Tests that runs on HOST, used to test core infrastucture/library section of the code",
+            "inherits": "default-host",
+            "cacheVariables": {
+                "KTL_ENABLE_TESTS": true,
+                "MEI_ENABLE_CORE_TESTS": true
+            }
+        },
+        {
+            "name": "coretests-san",
+            "displayName": "CoreTests with sanitizer",
+            "description": "Tests that runs on HOST, used to test core infrastucture/library section of the code",
+            "inherits": "coretests",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "KTL_ENABLE_TESTS": true,
+                "MEI_ENABLE_CORE_TESTS": true,
+                "CMAKE_CXX_FLAGS": "-fsanitize=undefined"
+            }
+        },
+        {
+            "name": "coretests-rel",
+            "displayName": "CoreTests in release mode",
+            "description": "Tests that runs on HOST, used to test core infrastucture/library section of the code",
+            "inherits": "coretests",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "KTL_ENABLE_TESTS": true,
+                "KTL_ENABLE_CHECKS": true,
+                "MEI_ENABLE_CORE_TESTS": true,
+                "CMAKE_CXX_FLAGS": "-fsanitize=undefined"
             }
         }
     ],

@@ -43,21 +43,22 @@ def get_field_range(value) -> tuple[int, int]:
             return parse_range(rng)
 
 
-def generate_bool(num_bits: int, buffer: io.TextIOBase):
+def generate_bool(field_name: str, num_bits: int, buffer: io.TextIOBase):
     if num_bits != 1:
         return
 
     write(buffer,
-          f"static constexpr auto SET = Value{{1}};\n")
-    write(buffer, f"static constexpr auto CLEAR = Value{{0}};\n")
+          f"[[no_unique_address]] Value<{field_name}_def, true, 1> SET;\n")
+    write(
+        buffer, f"[[no_unique_address]] Value<{field_name}_def, true, 0> CLEAR;\n")
 
 
-def generate_enums(enums: dict, buffer: io.TextIOBase):
+def generate_enums(field_name: str, enums: dict, buffer: io.TextIOBase):
     for name, val in enums.items():
         write(buffer,
-              f"static constexpr auto {name} = Value{{{val}}};\n")
+              f"[[no_unique_address]] Value<{field_name}_def, true, {val}> {name};\n")
 
-    write(buffer, "enum class Enum : typename Register::IntType {\n")
+    write(buffer, "enum class Enum : word_type {\n")
     increase_indent_level()
 
     for name, val in enums.items():
@@ -67,7 +68,16 @@ def generate_enums(enums: dict, buffer: io.TextIOBase):
     write(buffer, "};\n")
 
     write(
-        buffer, "[[nodiscard]] static constexpr auto EnumValueToStr(typename Register::IntType e) -> std::string_view {\n")
+        buffer, f"[[nodiscard]] constexpr auto operator()(Enum e) const noexcept  {{\n")
+    increase_indent_level()
+    write(
+        buffer, f"return Value<{field_name}_def, false, 0>{{static_cast<word_type>(e)}};\n")
+    decrease_indent_level()
+    write(buffer, "}\n")
+
+    # Generate EnumStr()
+    write(
+        buffer, "[[nodiscard]] static constexpr auto EnumStr(word_type e) -> std::optional<std::string_view> {\n")
 
     increase_indent_level()
     write(buffer, "switch(e) {\n")
@@ -75,17 +85,35 @@ def generate_enums(enums: dict, buffer: io.TextIOBase):
     increase_indent_level()
     for name, val in enums.items():
         write(buffer, f"case {val}: return \"{name}\";\n")
-    write(buffer, f"default: return \"<unknown>\";\n")
+    write(buffer, "default: return {};\n")
     decrease_indent_level()
 
     write(buffer, "}\n")
     decrease_indent_level()
 
-    write(buffer, "};\n")
+    write(buffer, "}\n")
+
+    # Generate IsValid()
+    write(
+        buffer, "[[nodiscard]] static constexpr auto IsValid(word_type e) -> bool {\n")
+
+    increase_indent_level()
+    write(buffer, "switch(e) {\n")
+
+    increase_indent_level()
+    for name, val in enums.items():
+        write(buffer, f"case {val}: return true;\n")
+    write(buffer, "default: return false;\n")
     decrease_indent_level()
 
+    write(buffer, "}\n")
 
-def generate_field(field, buffer: io.TextIOBase) -> str:
+    write(buffer, "return false;\n")
+    decrease_indent_level()
+    write(buffer, "}\n")
+
+
+def generate_field(field, regname: str, buffer: io.TextIOBase) -> str:
     keys = list(field.keys())
     values = list(field.values())
     name = keys[0]
@@ -97,44 +125,63 @@ def generate_field(field, buffer: io.TextIOBase) -> str:
         offset, count = get_field_range(values[0])
 
     write(buffer,
-          f"struct {name}: ::mei::registers::Field<\"{name}\", Register, {offset}, {count}> {{\n")
+          f"struct {name}_def : ::mei::registers::GenericField<{regname}, {offset}, {count}, \"{name}\"> {{\n")
     increase_indent_level()
 
-    generate_bool(count, buffer)
+    write(
+        buffer, f"[[nodiscard]] constexpr auto operator()(word_type v) const noexcept  {{\n")
+    increase_indent_level()
+    write(buffer, f"return Value<{name}_def, false, 0>{{v}};\n")
+    decrease_indent_level()
+    write(buffer, "}\n")
+
+    write(
+        buffer, f"[[nodiscard]] constexpr auto ValInternalUse(word_type v) const noexcept  {{\n")
+    increase_indent_level()
+    write(buffer, f"return Value<{name}_def, false, 0>{{v >> {offset}}};\n")
+    decrease_indent_level()
+    write(buffer, "}\n")
+
+    generate_bool(name, count, buffer)
     if len(keys) > 1:
-        generate_enums(dict(values[1]), buffer)
+        generate_enums(name, dict(values[1]), buffer)
 
     decrease_indent_level()
     write(buffer, "};\n")
+    write(buffer, f"// Offset = {offset}, NumBits = {count}\n")
+    write(buffer, f"[[no_unique_address]] {name}_def {name};\n")
 
     return name
 
 
 def generate_register(name: str, type: str, system_name: str, fields: list, buffer: io.TextIOBase):
-    write(buffer, f"namespace {name} {{\n")
+    write(buffer, f"namespace detail {{\n")
     increase_indent_level()
 
     write(buffer,
-          f"struct Register: ::mei::registers::Register<::mei::{type}, \"{name}\"> {{\n")
+          f"struct {name} : ::mei::registers::GenericRegister<{type}, \"{name}\"> {{\n")
     increase_indent_level()
 
     field_names = []
     for field in fields:
-        field_name = generate_field(field, buffer)
+        field_name = generate_field(field, name, buffer)
         field_names.append(field_name)
         write(buffer, "\n")
 
-    write(buffer, f"using FieldTypes = std::tuple<{','.join(field_names)}>;\n")
+    field_defs = [f"{name}_def" for name in field_names]
+    write(
+        buffer, f"using field_types = std::tuple<{','.join(field_defs)}>;\n")
 
     decrease_indent_level()
     write(buffer, "};\n")
+    decrease_indent_level()
+    write(buffer, "}\n")
+
+    write(buffer, f"inline constexpr detail::{name} {name};\n")
 
     if system_name != None:
         write(buffer,
-              f"DEFINE_SYSTEM_REGISTER({name}, {name}::Register, \"{system_name}\");\n")
-
-    decrease_indent_level()
-    write(buffer, "}\n\n")
+              f"DEFINE_SYSTEM_REGISTER({name}, detail::{name}, \"{system_name}\");\n")
 
 
 def generate_namespace(nsp: str, registers: list, buffer: io.TextIOBase):
@@ -168,9 +215,7 @@ for input_yaml in sys.argv[2:]:
 #include <string_view>
 #include <tuple>
 
-#include "mei/register/access.h"
-#include "mei/register/field.h"
-#include "mei/register/register.h"
+#include <mei/registers.hpp>
 
 """
 

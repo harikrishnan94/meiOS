@@ -1,0 +1,927 @@
+output: generated/test_regs.h
+
+namespaces:
+  - namespace:
+      name: mei::test::test_regs
+      registers:
+        # Memory Attribute Indirection Register - EL1
+        # Provides the memory attribute encodings corresponding to the possible AttrIndx values in a
+        # Long-descriptor format translation table entry for stage 1 translations at EL1.
+        - register:
+            name: MAIR_EL1
+            type: u64
+            system_name: MAIR_EL1
+            fields:
+              # Attribute 7
+              - Attr7_Normal_Outer:
+                60,4:
+                  Device: 0b0000
+
+                  WriteThrough_Transient_WriteAlloc: 0b0001
+                  WriteThrough_Transient_ReadAlloc: 0b0010
+                  WriteThrough_Transient_ReadWriteAlloc: 0b0011
+
+                  NonCacheable: 0b0100
+                  WriteBack_Transient_WriteAlloc: 0b0101
+                  WriteBack_Transient_ReadAlloc: 0b0110
+                  WriteBack_Transient_ReadWriteAlloc: 0b0111
+
+                  WriteThrough_NonTransient: 0b1000
+                  WriteThrough_NonTransient_WriteAlloc: 0b1001
+                  WriteThrough_NonTransient_ReadAlloc: 0b1010
+                  WriteThrough_NonTransient_ReadWriteAlloc: 0b1011
+
+                  WriteBack_NonTransient: 0b1100
+                  WriteBack_NonTransient_WriteAlloc: 0b1101
+                  WriteBack_NonTransient_ReadAlloc: 0b1110
+                  WriteBack_NonTransient_ReadWriteAlloc: 0b1111
+
+              - Attr7_Device:
+                56,8:
+                  nonGathering_nonReordering_noEarlyWriteAck: 0b0000_0000
+                  nonGathering_nonReordering_EarlyWriteAck: 0b0000_0100
+                  nonGathering_Reordering_EarlyWriteAck: 0b0000_1000
+                  Gathering_Reordering_EarlyWriteAck: 0b0000_1100
+
+              - Attr7_Normal_Inner:
+                56,4:
+                  WriteThrough_Transient: 0b0000
+                  WriteThrough_Transient_WriteAlloc: 0b0001
+                  WriteThrough_Transient_ReadAlloc: 0b0010
+                  WriteThrough_Transient_ReadWriteAlloc: 0b0011
+
+                  NonCacheable: 0b0100
+                  WriteBack_Transient_WriteAlloc: 0b0101
+                  WriteBack_Transient_ReadAlloc: 0b0110
+                  WriteBack_Transient_ReadWriteAlloc: 0b0111
+
+                  WriteThrough_NonTransient: 0b1000
+                  WriteThrough_NonTransient_WriteAlloc: 0b1001
+                  WriteThrough_NonTransient_ReadAlloc: 0b1010
+                  WriteThrough_NonTransient_ReadWriteAlloc: 0b1011
+
+                  WriteBack_NonTransient: 0b1100
+                  WriteBack_NonTransient_WriteAlloc: 0b1101
+                  WriteBack_NonTransient_ReadAlloc: 0b1110
+                  WriteBack_NonTransient_ReadWriteAlloc: 0b1111
+
+              # Attribute 6
+              - Attr6_Normal_Outer:
+                52,4:
+                  Device: 0b0000
+
+                  WriteThrough_Transient_WriteAlloc: 0b0001
+                  WriteThrough_Transient_ReadAlloc: 0b0010
+                  WriteThrough_Transient_ReadWriteAlloc: 0b0011
+
+                  NonCacheable: 0b0100
+                  WriteBack_Transient_WriteAlloc: 0b0101
+                  WriteBack_Transient_ReadAlloc: 0b0110
+                  WriteBack_Transient_ReadWriteAlloc: 0b0111
+
+                  WriteThrough_NonTransient: 0b1000
+                  WriteThrough_NonTransient_WriteAlloc: 0b1001
+                  WriteThrough_NonTransient_ReadAlloc: 0b1010
+                  WriteThrough_NonTransient_ReadWriteAlloc: 0b1011
+
+                  WriteBack_NonTransient: 0b1100
+                  WriteBack_NonTransient_WriteAlloc: 0b1101
+                  WriteBack_NonTransient_ReadAlloc: 0b1110
+                  WriteBack_NonTransient_ReadWriteAlloc: 0b1111
+
+              - Attr6_Device:
+                48,8:
+                  nonGathering_nonReordering_noEarlyWriteAck: 0b0000_0000
+                  nonGathering_nonReordering_EarlyWriteAck: 0b0000_0100
+                  nonGathering_Reordering_EarlyWriteAck: 0b0000_1000
+                  Gathering_Reordering_EarlyWriteAck: 0b0000_1100
+
+              - Attr6_Normal_Inner:
+                48,4:
+                  WriteThrough_Transient: 0b0000
+                  WriteThrough_Transient_WriteAlloc: 0b0001
+                  WriteThrough_Transient_ReadAlloc: 0b0010
+                  WriteThrough_Transient_ReadWriteAlloc: 0b0011
+
+                  NonCacheable: 0b0100
+                  WriteBack_Transient_WriteAlloc: 0b0101
+                  WriteBack_Transient_ReadAlloc: 0b0110
+                  WriteBack_Transient_ReadWriteAlloc: 0b0111
+
+                  WriteThrough_NonTransient: 0b1000
+                  WriteThrough_NonTransient_WriteAlloc: 0b1001
+                  WriteThrough_NonTransient_ReadAlloc: 0b1010
+                  WriteThrough_NonTransient_ReadWriteAlloc: 0b1011
+
+                  WriteBack_NonTransient: 0b1100
+                  WriteBack_NonTransient_WriteAlloc: 0b1101
+                  WriteBack_NonTransient_ReadAlloc: 0b1110
+                  WriteBack_NonTransient_ReadWriteAlloc: 0b1111
+
+              # Attribute 5
+              - Attr5_Normal_Outer:
+                44,4:
+                  Device: 0b0000
+
+                  WriteThrough_Transient_WriteAlloc: 0b0001
+                  WriteThrough_Transient_ReadAlloc: 0b0010
+                  WriteThrough_Transient_ReadWriteAlloc: 0b0011
+
+                  NonCacheable: 0b0100
+                  WriteBack_Transient_WriteAlloc: 0b0101
+                  WriteBack_Transient_ReadAlloc: 0b0110
+                  WriteBack_Transient_ReadWriteAlloc: 0b0111
+
+                  WriteThrough_NonTransient: 0b1000
+                  WriteThrough_NonTransient_WriteAlloc: 0b1001
+                  WriteThrough_NonTransient_ReadAlloc: 0b1010
+                  WriteThrough_NonTransient_ReadWriteAlloc: 0b1011
+
+                  WriteBack_NonTransient: 0b1100
+                  WriteBack_NonTransient_WriteAlloc: 0b1101
+                  WriteBack_NonTransient_ReadAlloc: 0b1110
+                  WriteBack_NonTransient_ReadWriteAlloc: 0b1111
+
+              - Attr5_Device:
+                40,8:
+                  nonGathering_nonReordering_noEarlyWriteAck: 0b0000_0000
+                  nonGathering_nonReordering_EarlyWriteAck: 0b0000_0100
+                  nonGathering_Reordering_EarlyWriteAck: 0b0000_1000
+                  Gathering_Reordering_EarlyWriteAck: 0b0000_1100
+
+              - Attr5_Normal_Inner:
+                40,4:
+                  WriteThrough_Transient: 0b0000
+                  WriteThrough_Transient_WriteAlloc: 0b0001
+                  WriteThrough_Transient_ReadAlloc: 0b0010
+                  WriteThrough_Transient_ReadWriteAlloc: 0b0011
+
+                  NonCacheable: 0b0100
+                  WriteBack_Transient_WriteAlloc: 0b0101
+                  WriteBack_Transient_ReadAlloc: 0b0110
+                  WriteBack_Transient_ReadWriteAlloc: 0b0111
+
+                  WriteThrough_NonTransient: 0b1000
+                  WriteThrough_NonTransient_WriteAlloc: 0b1001
+                  WriteThrough_NonTransient_ReadAlloc: 0b1010
+                  WriteThrough_NonTransient_ReadWriteAlloc: 0b1011
+
+                  WriteBack_NonTransient: 0b1100
+                  WriteBack_NonTransient_WriteAlloc: 0b1101
+                  WriteBack_NonTransient_ReadAlloc: 0b1110
+                  WriteBack_NonTransient_ReadWriteAlloc: 0b1111
+
+              # Attribute 4
+              - Attr4_Normal_Outer:
+                36,4:
+                  Device: 0b0000
+
+                  WriteThrough_Transient_WriteAlloc: 0b0001
+                  WriteThrough_Transient_ReadAlloc: 0b0010
+                  WriteThrough_Transient_ReadWriteAlloc: 0b0011
+
+                  NonCacheable: 0b0100
+                  WriteBack_Transient_WriteAlloc: 0b0101
+                  WriteBack_Transient_ReadAlloc: 0b0110
+                  WriteBack_Transient_ReadWriteAlloc: 0b0111
+
+                  WriteThrough_NonTransient: 0b1000
+                  WriteThrough_NonTransient_WriteAlloc: 0b1001
+                  WriteThrough_NonTransient_ReadAlloc: 0b1010
+                  WriteThrough_NonTransient_ReadWriteAlloc: 0b1011
+
+                  WriteBack_NonTransient: 0b1100
+                  WriteBack_NonTransient_WriteAlloc: 0b1101
+                  WriteBack_NonTransient_ReadAlloc: 0b1110
+                  WriteBack_NonTransient_ReadWriteAlloc: 0b1111
+
+              - Attr4_Device:
+                32,8:
+                  nonGathering_nonReordering_noEarlyWriteAck: 0b0000_0000
+                  nonGathering_nonReordering_EarlyWriteAck: 0b0000_0100
+                  nonGathering_Reordering_EarlyWriteAck: 0b0000_1000
+                  Gathering_Reordering_EarlyWriteAck: 0b0000_1100
+
+              - Attr4_Normal_Inner:
+                32,4:
+                  WriteThrough_Transient: 0b0000
+                  WriteThrough_Transient_WriteAlloc: 0b0001
+                  WriteThrough_Transient_ReadAlloc: 0b0010
+                  WriteThrough_Transient_ReadWriteAlloc: 0b0011
+
+                  NonCacheable: 0b0100
+                  WriteBack_Transient_WriteAlloc: 0b0101
+                  WriteBack_Transient_ReadAlloc: 0b0110
+                  WriteBack_Transient_ReadWriteAlloc: 0b0111
+
+                  WriteThrough_NonTransient: 0b1000
+                  WriteThrough_NonTransient_WriteAlloc: 0b1001
+                  WriteThrough_NonTransient_ReadAlloc: 0b1010
+                  WriteThrough_NonTransient_ReadWriteAlloc: 0b1011
+
+                  WriteBack_NonTransient: 0b1100
+                  WriteBack_NonTransient_WriteAlloc: 0b1101
+                  WriteBack_NonTransient_ReadAlloc: 0b1110
+                  WriteBack_NonTransient_ReadWriteAlloc: 0b1111
+
+              # Attribute 3
+              - Attr3_Normal_Outer:
+                28,4:
+                  Device: 0b0000
+
+                  WriteThrough_Transient_WriteAlloc: 0b0001
+                  WriteThrough_Transient_ReadAlloc: 0b0010
+                  WriteThrough_Transient_ReadWriteAlloc: 0b0011
+
+                  NonCacheable: 0b0100
+                  WriteBack_Transient_WriteAlloc: 0b0101
+                  WriteBack_Transient_ReadAlloc: 0b0110
+                  WriteBack_Transient_ReadWriteAlloc: 0b0111
+
+                  WriteThrough_NonTransient: 0b1000
+                  WriteThrough_NonTransient_WriteAlloc: 0b1001
+                  WriteThrough_NonTransient_ReadAlloc: 0b1010
+                  WriteThrough_NonTransient_ReadWriteAlloc: 0b1011
+
+                  WriteBack_NonTransient: 0b1100
+                  WriteBack_NonTransient_WriteAlloc: 0b1101
+                  WriteBack_NonTransient_ReadAlloc: 0b1110
+                  WriteBack_NonTransient_ReadWriteAlloc: 0b1111
+
+              - Attr3_Device:
+                24,8:
+                  nonGathering_nonReordering_noEarlyWriteAck: 0b0000_0000
+                  nonGathering_nonReordering_EarlyWriteAck: 0b0000_0100
+                  nonGathering_Reordering_EarlyWriteAck: 0b0000_1000
+                  Gathering_Reordering_EarlyWriteAck: 0b0000_1100
+
+              - Attr3_Normal_Inner:
+                24,4:
+                  WriteThrough_Transient: 0b0000
+                  WriteThrough_Transient_WriteAlloc: 0b0001
+                  WriteThrough_Transient_ReadAlloc: 0b0010
+                  WriteThrough_Transient_ReadWriteAlloc: 0b0011
+
+                  NonCacheable: 0b0100
+                  WriteBack_Transient_WriteAlloc: 0b0101
+                  WriteBack_Transient_ReadAlloc: 0b0110
+                  WriteBack_Transient_ReadWriteAlloc: 0b0111
+
+                  WriteThrough_NonTransient: 0b1000
+                  WriteThrough_NonTransient_WriteAlloc: 0b1001
+                  WriteThrough_NonTransient_ReadAlloc: 0b1010
+                  WriteThrough_NonTransient_ReadWriteAlloc: 0b1011
+
+                  WriteBack_NonTransient: 0b1100
+                  WriteBack_NonTransient_WriteAlloc: 0b1101
+                  WriteBack_NonTransient_ReadAlloc: 0b1110
+                  WriteBack_NonTransient_ReadWriteAlloc: 0b1111
+
+              # Attribute 2
+              - Attr2_Normal_Outer:
+                20,4:
+                  Device: 0b0000
+
+                  WriteThrough_Transient_WriteAlloc: 0b0001
+                  WriteThrough_Transient_ReadAlloc: 0b0010
+                  WriteThrough_Transient_ReadWriteAlloc: 0b0011
+
+                  NonCacheable: 0b0100
+                  WriteBack_Transient_WriteAlloc: 0b0101
+                  WriteBack_Transient_ReadAlloc: 0b0110
+                  WriteBack_Transient_ReadWriteAlloc: 0b0111
+
+                  WriteThrough_NonTransient: 0b1000
+                  WriteThrough_NonTransient_WriteAlloc: 0b1001
+                  WriteThrough_NonTransient_ReadAlloc: 0b1010
+                  WriteThrough_NonTransient_ReadWriteAlloc: 0b1011
+
+                  WriteBack_NonTransient: 0b1100
+                  WriteBack_NonTransient_WriteAlloc: 0b1101
+                  WriteBack_NonTransient_ReadAlloc: 0b1110
+                  WriteBack_NonTransient_ReadWriteAlloc: 0b1111
+
+              - Attr2_Device:
+                16,8:
+                  nonGathering_nonReordering_noEarlyWriteAck: 0b0000_0000
+                  nonGathering_nonReordering_EarlyWriteAck: 0b0000_0100
+                  nonGathering_Reordering_EarlyWriteAck: 0b0000_1000
+                  Gathering_Reordering_EarlyWriteAck: 0b0000_1100
+
+              - Attr2_Normal_Inner:
+                16,4:
+                  WriteThrough_Transient: 0b0000
+                  WriteThrough_Transient_WriteAlloc: 0b0001
+                  WriteThrough_Transient_ReadAlloc: 0b0010
+                  WriteThrough_Transient_ReadWriteAlloc: 0b0011
+
+                  NonCacheable: 0b0100
+                  WriteBack_Transient_WriteAlloc: 0b0101
+                  WriteBack_Transient_ReadAlloc: 0b0110
+                  WriteBack_Transient_ReadWriteAlloc: 0b0111
+
+                  WriteThrough_NonTransient: 0b1000
+                  WriteThrough_NonTransient_WriteAlloc: 0b1001
+                  WriteThrough_NonTransient_ReadAlloc: 0b1010
+                  WriteThrough_NonTransient_ReadWriteAlloc: 0b1011
+
+                  WriteBack_NonTransient: 0b1100
+                  WriteBack_NonTransient_WriteAlloc: 0b1101
+                  WriteBack_NonTransient_ReadAlloc: 0b1110
+                  WriteBack_NonTransient_ReadWriteAlloc: 0b1111
+
+              # Attribute 1
+              - Attr1_Normal_Outer:
+                12,4:
+                  Device: 0b0000
+
+                  WriteThrough_Transient_WriteAlloc: 0b0001
+                  WriteThrough_Transient_ReadAlloc: 0b0010
+                  WriteThrough_Transient_ReadWriteAlloc: 0b0011
+
+                  NonCacheable: 0b0100
+                  WriteBack_Transient_WriteAlloc: 0b0101
+                  WriteBack_Transient_ReadAlloc: 0b0110
+                  WriteBack_Transient_ReadWriteAlloc: 0b0111
+
+                  WriteThrough_NonTransient: 0b1000
+                  WriteThrough_NonTransient_WriteAlloc: 0b1001
+                  WriteThrough_NonTransient_ReadAlloc: 0b1010
+                  WriteThrough_NonTransient_ReadWriteAlloc: 0b1011
+
+                  WriteBack_NonTransient: 0b1100
+                  WriteBack_NonTransient_WriteAlloc: 0b1101
+                  WriteBack_NonTransient_ReadAlloc: 0b1110
+                  WriteBack_NonTransient_ReadWriteAlloc: 0b1111
+
+              - Attr1_Device:
+                8,8:
+                  nonGathering_nonReordering_noEarlyWriteAck: 0b0000_0000
+                  nonGathering_nonReordering_EarlyWriteAck: 0b0000_0100
+                  nonGathering_Reordering_EarlyWriteAck: 0b0000_1000
+                  Gathering_Reordering_EarlyWriteAck: 0b0000_1100
+
+              - Attr1_Normal_Inner:
+                8,4:
+                  WriteThrough_Transient: 0b0000
+                  WriteThrough_Transient_WriteAlloc: 0b0001
+                  WriteThrough_Transient_ReadAlloc: 0b0010
+                  WriteThrough_Transient_ReadWriteAlloc: 0b0011
+
+                  NonCacheable: 0b0100
+                  WriteBack_Transient_WriteAlloc: 0b0101
+                  WriteBack_Transient_ReadAlloc: 0b0110
+                  WriteBack_Transient_ReadWriteAlloc: 0b0111
+
+                  WriteThrough_NonTransient: 0b1000
+                  WriteThrough_NonTransient_WriteAlloc: 0b1001
+                  WriteThrough_NonTransient_ReadAlloc: 0b1010
+                  WriteThrough_NonTransient_ReadWriteAlloc: 0b1011
+
+                  WriteBack_NonTransient: 0b1100
+                  WriteBack_NonTransient_WriteAlloc: 0b1101
+                  WriteBack_NonTransient_ReadAlloc: 0b1110
+                  WriteBack_NonTransient_ReadWriteAlloc: 0b1111
+
+              # Attribute 0
+              - Attr0_Normal_Outer:
+                4,4:
+                  Device: 0b0000
+
+                  WriteThrough_Transient_WriteAlloc: 0b0001
+                  WriteThrough_Transient_ReadAlloc: 0b0010
+                  WriteThrough_Transient_ReadWriteAlloc: 0b0011
+
+                  NonCacheable: 0b0100
+                  WriteBack_Transient_WriteAlloc: 0b0101
+                  WriteBack_Transient_ReadAlloc: 0b0110
+                  WriteBack_Transient_ReadWriteAlloc: 0b0111
+
+                  WriteThrough_NonTransient: 0b1000
+                  WriteThrough_NonTransient_WriteAlloc: 0b1001
+                  WriteThrough_NonTransient_ReadAlloc: 0b1010
+                  WriteThrough_NonTransient_ReadWriteAlloc: 0b1011
+
+                  WriteBack_NonTransient: 0b1100
+                  WriteBack_NonTransient_WriteAlloc: 0b1101
+                  WriteBack_NonTransient_ReadAlloc: 0b1110
+                  WriteBack_NonTransient_ReadWriteAlloc: 0b1111
+
+              - Attr0_Device:
+                0,8:
+                  nonGathering_nonReordering_noEarlyWriteAck: 0b0000_0000
+                  nonGathering_nonReordering_EarlyWriteAck: 0b0000_0100
+                  nonGathering_Reordering_EarlyWriteAck: 0b0000_1000
+                  Gathering_Reordering_EarlyWriteAck: 0b0000_1100
+
+              - Attr0_Normal_Inner:
+                0,4:
+                  WriteThrough_Transient: 0b0000
+                  WriteThrough_Transient_WriteAlloc: 0b0001
+                  WriteThrough_Transient_ReadAlloc: 0b0010
+                  WriteThrough_Transient_ReadWriteAlloc: 0b0011
+
+                  NonCacheable: 0b0100
+                  WriteBack_Transient_WriteAlloc: 0b0101
+                  WriteBack_Transient_ReadAlloc: 0b0110
+                  WriteBack_Transient_ReadWriteAlloc: 0b0111
+
+                  WriteThrough_NonTransient: 0b1000
+                  WriteThrough_NonTransient_WriteAlloc: 0b1001
+                  WriteThrough_NonTransient_ReadAlloc: 0b1010
+                  WriteThrough_NonTransient_ReadWriteAlloc: 0b1011
+
+                  WriteBack_NonTransient: 0b1100
+                  WriteBack_NonTransient_WriteAlloc: 0b1101
+                  WriteBack_NonTransient_ReadAlloc: 0b1110
+                  WriteBack_NonTransient_ReadWriteAlloc: 0b1111
+
+        # Translation Control Register - EL1
+        # The control register for stage 1 of the EL1&0 translation regime.
+        - register:
+            name: TCR_EL1
+            type: u64
+            system_name: TCR_EL1
+            fields:
+              # When ARMv8.3-PAuth is implemented:
+              #     Controls the use of the top byte of instruction addresses for address matching.
+              #     0 TCR_EL1.TBI1 applies to Instruction and Data accesses.
+              #     1 TCR_EL1.TBI1 applies to Data accesses only.
+              #     This affects addresses where the address would be translated by tables pointed
+              #     to by TTBR1_EL1. This field resets to an architecturally UNKNOWN value.
+              # Otherwise:
+              #     Reserved, RES0.
+              - TBID1: 52,1
+
+              # When ARMv8.3-PAuth is implemented:
+              #     Controls the use of the top byte of instruction addresses for address matching.
+              #     0 TCR_EL1.TBI0 applies to Instruction and Data accesses.
+              #     1 TCR_EL1.TBI0 applies to Data accesses only.
+              #     This affects addresses where the address would be translated by tables pointed
+              #     to by TTBR0_EL1. This field resets to an architecturally UNKNOWN value.
+              # Otherwise:
+              #     Reserved, RES0.
+              - TBID0: 51,1
+
+              # When FEAT_HAFDBS is implemented hardware can update the dirty flags in the stage1
+              # descriptors
+              - HD:
+                40,1:
+                  Disable: 0
+                  Enable: 1
+
+              # When FEAT_HAFDBS is implemented hardware can update the access flags in the stage1
+              # descriptors
+              - HA:
+                39,1:
+                  Disable: 0
+                  Enable: 1
+
+              # Top Byte ignored - indicates whether the top byte of an address is used for address
+              # match for the TTBR1_EL1 region, or ignored and used for tagged addresses. Defined values
+              # are:
+              #
+              # 0 Top Byte used in the address calculation.
+              #
+              # 1 Top Byte ignored in the address calculation.
+              #
+              # This affects addresses generated in EL0 and EL1 using AArch64 where the address would be
+              # translated by tables pointed to by TTBR1_EL1. It has an effect whether the EL1&0
+              # translation regime is enabled or not.
+              #
+              # If ARMv8.3-PAuth is implemented and TCR_EL1.TBID1 is 1, then this field only applies to
+              # Data accesses.
+              # Otherwise, if the value of TBI1 is 1 and bit [55] of the target address to be stored to
+              # the PC is 0, then bits[63:56] of that target address are also set to 0 before the
+              # address is stored in the PC, in the following cases:
+              #
+              # • A branch or procedure return within EL0 or EL1.
+              # • An exception taken to EL1.
+              # • An exception return to EL0 or EL1.
+              - TBI1:
+                38,1:
+                  Used: 0
+                  Ignored: 1
+
+              # Top Byte ignored - indicates whether the top byte of an address is used for address
+              # match for the TTBR0_EL1 region, or ignored and used for tagged addresses. Defined values
+              # are:
+              #
+              # 0 Top Byte used in the address calculation.
+              #
+              # 1 Top Byte ignored in the address calculation.
+              #
+              # This affects addresses generated in EL0 and EL1 using AArch64 where the address would be
+              # translated by tables pointed to by TTBR0_EL1. It has an effect whether the EL1&0
+              # translation regime is enabled or not.
+              #
+              # If ARMv8.3-PAuth is implemented and TCR_EL1.TBID0 is 1, then this field only applies to
+              # Data accesses.
+              # Otherwise, if the value of TBI0 is 1 and bit [55] of the target address to be stored to
+              # the PC is 0, then bits[63:56] of that target address are also set to 0 before the
+              # address is stored in the PC, in the following cases:
+              #
+              # • A branch or procedure return within EL0 or EL1.
+              # • An exception taken to EL1.
+              # • An exception return to EL0 or EL1.
+              - TBI0:
+                37,1:
+                  Used: 0
+                  Ignored: 1
+
+              # ASID Size. Defined values are:
+              #
+              # 0 8 bit - the upper 8 bits of TTBR0_EL1 and TTBR1_EL1 are ignored by hardware for every
+              #           purpose except reading back the register, and are treated as if they are all
+              #           zeros for when used for allocation and matching entries in the TLB.
+              #
+              # 1 16 bit - the upper 16 bits of TTBR0_EL1 and TTBR1_EL1 are used for allocation and
+              #            matching in the TLB.
+              #
+              # If the implementation has only 8 bits of ASID, this field is RES0.
+              - AS:
+                36,1:
+                  ASID8Bits: 0
+                  ASID16Bits: 1
+
+              # Intermediate Physical Address Size.
+              #
+              # 000 32 bits, 4GiB.
+              # 001 36 bits, 64GiB.
+              # 010 40 bits, 1TiB.
+              # 011 42 bits, 4TiB.
+              # 100 44 bits, 16TiB.
+              # 101 48 bits, 256TiB.
+              # 110 52 bits, 4PiB
+              #
+              # Other values are reserved.
+              #
+              # The reserved values behave in the same way as the 101 or 110 encoding, but software must
+              # not rely on this property as the behavior of the reserved values might change in a
+              # future revision of the architecture.
+              #
+              # The value 110 is permitted only if ARMv8.2-LPA is implemented and the translation
+              # granule size is 64KiB.
+              #
+              # In an implementation that supports 52-bit PAs, if the value of this field is not 110
+              # then bits[51:48] of every translation table base address for the stage of translation
+              # controlled by TCR_EL1 are 0000.
+              - IPS:
+                32,3:
+                  Bits_32: 0b000
+                  Bits_36: 0b001
+                  Bits_40: 0b010
+                  Bits_42: 0b011
+                  Bits_44: 0b100
+                  Bits_48: 0b101
+                  Bits_52: 0b110
+
+              # Granule size for the TTBR1_EL1.
+              #
+              # 10 4KiB
+              # 01 16KiB
+              # 11 64KiB
+              #
+              # Other values are reserved.
+              #
+              # If the value is programmed to either a reserved value, or a size that has not been
+              # implemented, then the hardware will treat the field as if it has been programmed to an
+              # IMPLEMENTATION DEFINED choice of the sizes that has been implemented for all purposes
+              # other than the value read back from this register.
+              #
+              # It is IMPLEMENTATION DEFINED whether the value read back is the value programmed or the
+              # value that corresponds to the size chosen.
+              - TG1:
+                30,2:
+                  KiB_4: 0b10
+                  KiB_16: 0b01
+                  KiB_64: 0b11
+
+              # Shareability attribute for memory associated with translation table walks using
+              # TTBR1_EL1.
+              #
+              # 00 Non-shareable
+              # 10 Outer Shareable
+              # 11 Inner Shareable
+              #
+              # Other values are reserved.
+              - SH1:
+                28,2:
+                  None: 0b00
+                  Outer: 0b10
+                  Inner: 0b11
+
+              # Outer cacheability attribute for memory associated with translation table walks using
+              # TTBR1_EL1.
+              #
+              # 00 Normal memory, Outer Non-cacheable
+              #
+              # 01 Normal memory, Outer Write-Back Read-Allocate Write-Allocate Cacheable
+              #
+              # 10 Normal memory, Outer Write-Through Read-Allocate No Write-Allocate Cacheable
+              #
+              # 11 Normal memory, Outer Write-Back Read-Allocate No Write-Allocate Cacheable
+              - ORGN1:
+                26,2:
+                  NonCacheable: 0b00
+                  WriteBack_ReadAlloc_WriteAlloc_Cacheable: 0b01
+                  WriteThrough_ReadAlloc_NoWriteAlloc_Cacheable: 0b10
+                  WriteBack_ReadAlloc_NoWriteAlloc_Cacheable: 0b11
+
+              # Inner cacheability attribute for memory associated with translation
+              # table walks using TTBR1_EL1.
+              #
+              # 00 Normal memory, Inner Non-cacheable
+              #
+              # 01 Normal memory, Inner Write-Back Read-Allocate Write-Allocate Cacheable
+              #
+              # 10 Normal memory, Inner Write-Through Read-Allocate No Write-Allocate Cacheable
+              #
+              # 11 Normal memory, Inner Write-Back Read-Allocate No Write-Allocate Cacheable
+              - IRGN1:
+                24,2:
+                  NonCacheable: 0b00
+                  WriteBack_ReadAlloc_WriteAlloc_Cacheable: 0b01
+                  WriteThrough_ReadAlloc_NoWriteAlloc_Cacheable: 0b10
+                  WriteBack_ReadAlloc_NoWriteAlloc_Cacheable: 0b11
+
+              # Translation table walk disable for translations using TTBR1_EL1. This bit controls
+              # whether a translation table walk is performed on a TLB miss, for an address that is
+              # translated using TTBR1_EL1. The encoding of this bit is:
+              #
+              # 0 Perform translation table walks using TTBR1_EL1.
+              #
+              # 1 A TLB miss on an address that is translated using TTBR1_EL1 generates a Translation
+              #   fault. No translation table walk is performed.
+              - EPD1:
+                23,1:
+                  EnableTTBR1Walks: 0
+                  DisableTTBR1Walks: 1
+
+              # Selects whether TTBR0_EL1 or TTBR1_EL1 defines the ASID. The encoding of this bit is:
+              #
+              # 0 TTBR0_EL1.ASID defines the ASID.
+              # 1 TTBR1_EL1.ASID defines the ASID.
+              - A1:
+                22,1:
+                  TTBR0: 0
+                  TTBR1: 1
+
+              # The size offset of the memory region addressed by TTBR1_EL1. The region size is
+              # 2^(64-T1SZ) bytes.
+              #
+              # The maximum and minimum possible values for T1SZ depend on the level of translation
+              # table and the memory translation granule size, as described in the AArch64 Virtual
+              # Memory System Architecture chapter.
+              #
+              # This field resets to an architecturally UNKNOWN value.
+              - T1SZ: 16,6
+
+              # Granule size for the TTBR0_EL1.
+              #
+              # 00 4KiB
+              # 01 64KiB
+              # 10 16KiB
+              #
+              # Other values are reserved.
+              #
+              # If the value is programmed to either a reserved value, or a size that has not been
+              # implemented, then the hardware will treat the field as if it has been programmed to an
+              # IMPLEMENTATION DEFINED choice of the sizes that has been implemented for all purposes
+              # other than the value read back from this register.
+              #
+              # It is IMPLEMENTATION DEFINED whether the value read back is the value programmed or the
+              # value that corresponds to the size chosen.
+              - TG0:
+                14,2:
+                  KiB_4: 0b00
+                  KiB_16: 0b10
+                  KiB_64: 0b01
+
+              # Shareability attribute for memory associated with translation table walks using
+              # TTBR0_EL1.
+              #
+              # 00 Non-shareable
+              # 10 Outer Shareable
+              # 11 Inner Shareable
+              #
+              # Other values are reserved.
+              - SH0:
+                12,2:
+                  None: 0b00
+                  Outer: 0b10
+                  Inner: 0b11
+
+              # Outer cacheability attribute for memory associated with translation table walks using
+              # TTBR0_EL1.
+              #
+              # 00 Normal memory, Outer Non-cacheable
+              #
+              # 01 Normal memory, Outer Write-Back Read-Allocate Write-Allocate Cacheable
+              #
+              # 10 Normal memory, Outer Write-Through Read-Allocate No Write-Allocate Cacheable
+              #
+              # 11 Normal memory, Outer Write-Back Read-Allocate No Write-Allocate Cacheable
+              - ORGN0:
+                10,2:
+                  NonCacheable: 0b00
+                  WriteBack_ReadAlloc_WriteAlloc_Cacheable: 0b01
+                  WriteThrough_ReadAlloc_NoWriteAlloc_Cacheable: 0b10
+                  WriteBack_ReadAlloc_NoWriteAlloc_Cacheable: 0b11
+
+              # Inner cacheability attribute for memory associated with translation table walks using
+              # TTBR0_EL1.
+              #
+              # 00 Normal memory, Inner Non-cacheable
+              #
+              # 01 Normal memory, Inner Write-Back Read-Allocate Write-Allocate Cacheable
+              #
+              # 10 Normal memory, Inner Write-Through Read-Allocate No Write-Allocate Cacheable
+              #
+              # 11 Normal memory, Inner Write-Back Read-Allocate No Write-Allocate Cacheable
+              - IRGN0:
+                8,2:
+                  NonCacheable: 0b00
+                  WriteBack_ReadAlloc_WriteAlloc_Cacheable: 0b01
+                  WriteThrough_ReadAlloc_NoWriteAlloc_Cacheable: 0b10
+                  WriteBack_ReadAlloc_NoWriteAlloc_Cacheable: 0b11
+
+              # Translation table walk disable for translations using TTBR0_EL1. This bit controls
+              # whether a translation table walk is performed on a TLB miss, for an address that is
+              # translated using TTBR0_EL1. The encoding of this bit is:
+              #
+              # 0 Perform translation table walks using TTBR0_EL1.
+              #
+              # 1 A TLB miss on an address that is translated using TTBR0_EL1 generates a Translation
+              #   fault. No translation table walk is performed.
+              - EPD0:
+                7,1:
+                  EnableTTBR0Walks: 0
+                  DisableTTBR0Walks: 1
+
+              # The size offset of the memory region addressed by TTBR0_EL1. The region size is
+              # 2^(64-T0SZ) bytes.
+              #
+              # The maximum and minimum possible values for T0SZ depend on the level of translation
+              # table and the memory translation granule size, as described in the AArch64 Virtual
+              # Memory System Architecture chapter.
+              - T0SZ: 0,6
+
+        # A table descriptor (level 0), as per ARMv8-A Architecture Reference Manual Figure D8-12.
+        - register:
+            name: STAGE1_TABLE_DESCRIPTOR
+            type: u64
+            fields:
+              # Physical address of the next descriptor.
+              - NEXT_LEVEL_TABLE_ADDR: 12,36 # [47:12]
+              - TYPE:
+                1,1:
+                  Block: 0
+                  Table: 1
+              - Valid:
+                0,1:
+                  False: 0
+                  True: 1
+
+          # Block descriptors for level 1 and 2, as per ARMv8-A Architecture Reference Manual Figure D8-14.
+          # Block descriptors can be used to implement Hugepages by compressing Translation Table.
+        - register:
+            name: STAGE1_BLOCK_DESCRIPTOR
+            type: u64
+            fields:
+              # Bits for Software Use
+              - SWUSE: 55,4
+
+              # Unprivileged execute-never.
+              - UXN:
+                54,1:
+                  False: 0
+                  True: 1
+
+              # Unprivileged execute-never.
+              - PXN:
+                53,1:
+                  False: 0
+                  True: 1
+
+              # Bits [47:30] of Output Address. Points to a 1GiB Physical Page.
+              - OUTPUT_ADDR_1GiB: 30,18
+              # Bits [47:21] of Output Address. Points to a 2MiB Physical Page.
+              - OUTPUT_ADDR_2MiB: 21,27
+
+              # Access flag.
+              - AF:
+                10,1:
+                  True: 1
+                  False: 0
+
+              # Shareability field.
+              - SH:
+                8,2:
+                  OuterShareable: 0b10
+                  InnerShareable: 0b11
+
+              # Access Permissions.
+              - AP:
+                6,2:
+                  RW_EL1: 0b00
+                  RW_EL1_EL0: 0b01
+                  RO_EL1: 0b10
+                  RO_EL1_EL0: 0b11
+
+              # Memory attributes index into the MAIR_EL1 register.
+              - AttrIndx: 2,3
+
+              - TYPE:
+                1:
+                  Reserved_Invalid: 1
+                  Block: 0
+
+              - Valid:
+                0:
+                  False: 0
+                  True: 1
+
+        # A level 3 page descriptor, as per ARMv8-A Architecture Reference Manual Figure D5-17.
+        - register:
+            name: STAGE1_PAGE_DESCRIPTOR
+            type: u64
+            fields:
+              # Bits for Software Use
+              - SWUSE: 55,4
+
+              # Unprivileged execute-never.
+              - UXN:
+                54,1:
+                  False: 0
+                  True: 1
+
+              # Unprivileged execute-never.
+              - PXN:
+                53,1:
+                  False: 0
+                  True: 1
+
+              # Bits [47:12] of Output Address. Points to a 4KiB Physical Page.
+              - OUTPUT_ADDR_4KiB: 12,36
+
+              # Access flag.
+              - AF:
+                10,1:
+                  True: 1
+                  False: 0
+
+              # Shareability field.
+              - SH:
+                8,2:
+                  OuterShareable: 0b10
+                  InnerShareable: 0b11
+
+              # Access Permissions.
+              - AP:
+                6,2:
+                  RW_EL1: 0b00
+                  RW_EL1_EL0: 0b01
+                  RO_EL1: 0b10
+                  RO_EL1_EL0: 0b11
+
+              # Memory attributes index into the MAIR_EL1 register.
+              - AttrIndx: 2,3
+
+              - TYPE:
+                1:
+                  Reserved_Invalid: 1
+                  Block: 0
+
+              - Valid:
+                0:
+                  False: 0
+                  True: 1
+
+        # Virtual Address with 4KB granule and 4 level translation
+        - register:
+            name: VA
+            type: u64
+            fields:
+              # Offset within page
+              # For 4 KiB Page
+              - PageOffset_4KiB: 0,12
+              # For 2 MiB Page
+              - PageOffset_2MiB: 0,21
+              # For 1 GiB Page
+              - PageOffset_1GiB: 0,30
+
+              # Level 3 Index
+              - Level_3: 12,9
+
+              # Level 2 Index
+              - Level_2: 21,9
+
+              # Level 1 Index
+              - Level_1: 30,9
+
+              # Level 0 Index
+              - Level_0: 39,9
+
+              # TTBR select
+              - TTBR_Select: 48,16
