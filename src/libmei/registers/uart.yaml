@@ -1,4 +1,4 @@
-output: generated/uart.h
+output: generated/uart.hpp
 namespaces:
   # UART Register Bitfields
   - namespace:

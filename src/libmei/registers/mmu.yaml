@@ -1,4 +1,4 @@
-output: generated/mmu.h
+output: generated/mmu.hpp
 
 namespaces:
   - namespace:

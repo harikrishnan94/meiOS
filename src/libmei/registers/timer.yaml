@@ -1,4 +1,4 @@
-output: generated/timer.h
+output: generated/timer.hpp
 
 namespaces:
   - namespace:

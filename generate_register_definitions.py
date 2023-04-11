@@ -77,7 +77,7 @@ def generate_enums(field_name: str, enums: dict, buffer: io.TextIOBase):
 
     # Generate EnumStr()
     write(
-        buffer, "[[nodiscard]] static constexpr auto EnumStr(word_type e) -> std::optional<std::string_view> {\n")
+        buffer, "[[nodiscard]] static constexpr auto EnumStr(word_type e) -> std::optional<ktl::string_view> {\n")
 
     increase_indent_level()
     write(buffer, "switch(e) {\n")

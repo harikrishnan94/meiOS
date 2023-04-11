@@ -1,4 +1,4 @@
-output: generated/test_regs.h
+output: generated/test_regs.hpp
 
 namespaces:
   - namespace:

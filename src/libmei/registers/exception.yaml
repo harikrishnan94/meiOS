@@ -1,4 +1,4 @@
-output: generated/exception.h
+output: generated/exception.hpp
 
 namespaces:
   - namespace:

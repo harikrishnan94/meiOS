@@ -103,13 +103,11 @@ struct field_traits {
  public:
   using enum_type = find_enum_type<F>::field::Enum;
 
-  static constexpr auto is_enum = std::bool_constant<std::is_enum_v<enum_type>>::value;
-
-  // static constexpr auto is_enum =
-  //     std::bool_constant<std::is_enum_v<enum_type>&& requires(word_type enum_val) {
-  //         { F::EnumStr(enum_val) } -> std::same_as<std::optional<string_view>>;
-  //         { F::IsValid(enum_val) } -> std::same_as<bool>;
-  //     }>::value;
+  static constexpr auto is_enum =
+      std::bool_constant<std::is_enum_v<enum_type>&& requires(word_type enum_val) {
+        { F::EnumStr(enum_val) } -> std::same_as<std::optional<ktl::string_view>>;
+        { F::IsValid(enum_val) } -> std::same_as<bool>;
+      }>::value;
 
   static constexpr ktl::u8 offset = field_type::offset::value;
   static constexpr ktl::u8 numbits = field_type::numbits::value;

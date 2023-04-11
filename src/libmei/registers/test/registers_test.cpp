@@ -1,4 +1,4 @@
-#include "generated/test_regs.h"
+#include "generated/test_regs.hpp"
 
 using namespace ktl;
 

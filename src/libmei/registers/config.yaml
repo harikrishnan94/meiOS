@@ -1,4 +1,4 @@
-output: generated/config.h
+output: generated/config.hpp
 
 namespaces:
   - namespace:
