@@ -1,5 +1,7 @@
 #include "generated/test_regs.h"
 
+using namespace ktl;
+
 auto main() -> int {
   using namespace mei::registers;
   using namespace mei::test::test_regs;

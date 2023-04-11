@@ -159,7 +159,7 @@ def generate_register(name: str, type: str, system_name: str, fields: list, buff
     increase_indent_level()
 
     write(buffer,
-          f"struct {name} : ::mei::registers::GenericRegister<{type}, \"{name}\"> {{\n")
+          f"struct {name} : ::mei::registers::GenericRegister<::ktl::{type}, \"{name}\"> {{\n")
     increase_indent_level()
 
     field_names = []

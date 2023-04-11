@@ -6,12 +6,11 @@
 #include <type_traits>
 
 #include <ktl/bitops.hpp>
+#include <ktl/fmt/format.hpp>
 #include <ktl/int.hpp>
 #include <ktl/memory.hpp>
 #include <ktl/string_view.hpp>
 #include <ktl/utility.hpp>
-
-using namespace ktl;
 
 namespace mei::registers {
 namespace detail {
@@ -28,11 +27,11 @@ struct is_tuple<std::tuple<Ts...>> {
 template<typename R>
 concept register_like = std::is_empty_v<R> && std::is_trivial_v<R> && requires {
   { std::integral<typename R::word_type> };
-  { std::same_as<decltype(R::name), string_view> };
+  { std::same_as<decltype(R::name), ktl::string_view> };
   { is_tuple<typename R::field_types>::value };
 };
 
-template<const_string Str>
+template<ktl::const_string Str>
 struct named_string {
   constexpr auto begin() const noexcept {
     return Str.begin();
@@ -51,7 +50,7 @@ struct named_string {
 template<typename F>
 concept field_like = std::is_empty_v<F> && std::is_default_constructible_v<F> && requires {
   { detail::register_like<typename F::register_type> };
-  { std::same_as<decltype(F::name), string_view> };
+  { std::same_as<decltype(F::name), ktl::string_view> };
   { std::integral<std::decay_t<decltype(F::offset::value)>> };
   { std::integral<std::decay_t<decltype(F::numbits::value)>> };
   { F::numbits::value != 0 };
@@ -112,9 +111,9 @@ struct field_traits {
   //         { F::IsValid(enum_val) } -> std::same_as<bool>;
   //     }>::value;
 
-  static constexpr u8 offset = field_type::offset::value;
-  static constexpr u8 numbits = field_type::numbits::value;
-  static constexpr auto mask = CreateMask<word_type>(offset, numbits);
+  static constexpr ktl::u8 offset = field_type::offset::value;
+  static constexpr ktl::u8 numbits = field_type::numbits::value;
+  static constexpr auto mask = ktl::CreateMask<word_type>(offset, numbits);
   static constexpr auto name = field_type::name;
 
   static constexpr auto IsValid(word_type val) noexcept -> bool {
@@ -134,7 +133,7 @@ struct field_traits {
   }
 
   static constexpr auto Contains(word_type regval, word_type field_val) noexcept -> bool {
-    return EqualsInMask(regval, field_val, mask);
+    return ktl::EqualsInMask(regval, field_val, mask);
   }
 
   static constexpr auto AsEnum(word_type val) noexcept -> std::optional<enum_type>
@@ -151,25 +150,25 @@ struct field_traits {
     return static_cast<enum_type>(val);
   }
 
-  static constexpr auto EnumStr(word_type val) noexcept -> std::optional<string_view>
+  static constexpr auto EnumStr(word_type val) noexcept -> std::optional<ktl::string_view>
     requires(is_enum)
   {
     return F::EnumStr(val);
   }
 };
 
-template<std::integral WordType, const_string Name>
+template<std::integral WordType, ktl::const_string Name>
 struct GenericRegister {
   using word_type = WordType;
 
   static constexpr detail::named_string<Name> name = {};
 };
 
-template<typename Register, usize Offset, usize NumBits, const_string Name>
+template<typename Register, ktl::usize Offset, ktl::usize NumBits, ktl::const_string Name>
 struct GenericField {
   using register_type = Register;
-  using offset = std::integral_constant<usize, Offset>;
-  using numbits = std::integral_constant<usize, NumBits>;
+  using offset = std::integral_constant<ktl::usize, Offset>;
+  using numbits = std::integral_constant<ktl::usize, NumBits>;
 
   static constexpr detail::named_string<Name> name = {};
 
@@ -248,7 +247,7 @@ Set(typename field_traits<typename FV1::field_type>::word_type reg_val,
        | field_traits<typename FVs::field_type>::mask);
   const auto new_val = (fv1.val() | ... | fvs.val());
 
-  return SetMaskedBits(reg_val, new_val, mask);
+  return ktl::SetMaskedBits(reg_val, new_val, mask);
 }
 
 template<typename RegisterAccessor>
@@ -372,7 +371,7 @@ class MemoryMappedRegister: public ops::mixin<MemoryMappedRegister<Register>> {
   MemoryMappedRegister() = delete;
   MemoryMappedRegister(std::nullptr_t) = delete;
 
-  explicit constexpr MemoryMappedRegister(not_null<word_type*> reg_address) :
+  explicit constexpr MemoryMappedRegister(ktl::not_null<word_type*> reg_address) :
       m_reg_address {reg_address} {}
 
   explicit constexpr MemoryMappedRegister(uintptr_t reg_address) :
