@@ -2,36 +2,18 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "type": "process",
-            "label": "Master Build Task",
-            "isBuildCommand": true,
-            "command": "echo",
-            "dependsOn": [
-                "Build",
-                "Generate Clangd Config (Update compile_commands.json)"
-            ],
-            "problemMatcher": []
-        },
-        {
             "type": "cmake",
             "label": "Build",
             "command": "build",
             "targets": [
                 "all"
             ],
+            "detail": "CMake Full Build task",
             "problemMatcher": [],
-            "detail": "CMake Full Build task"
-        },
-        {
-            "type": "process",
-            "label": "Generate Clangd Config (Update compile_commands.json)",
-            "command": "${workspaceFolder}/generate_clangd_config.py",
-            "args": [
-                "${env:ARM_GCC_TOOLCHAIN_PATH}/aarch64-none-elf-g++",
-                "${workspaceFolder}/out/compile_commands.json",
-                "${workspaceFolder}/compile_commands.json"
-            ],
-            "problemMatcher": []
+            "group": {
+                "isDefault": true,
+                "kind": "build"
+            },
         },
         {
             "type": "shell",

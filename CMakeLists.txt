@@ -19,6 +19,9 @@ endif()
 
 set(MEI_INCLUDE_DIR "${PROJECT_SOURCE_DIR}/include")
 
+enable_testing()
+include(CTest)
+
 include(WarningFlags)
 include(GenerateRegisters)
 

@@ -14,6 +14,8 @@
             "binaryDir": "${sourceDir}/out/build/${presetName}",
             "installDir": "${sourceDir}/out/install/${presetName}",
             "cacheVariables": {
+                "CMAKE_C_COMPILER": "gcc-12",
+                "CMAKE_CXX_COMPILER": "gcc-12",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": true
             }
         },
