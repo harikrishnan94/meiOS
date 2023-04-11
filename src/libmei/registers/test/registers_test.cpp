@@ -44,7 +44,7 @@ auto main() -> int {
         "");
   };
 
-  static constinit auto local_reg = [&] {
+  [[maybe_unused]] static constinit auto local_reg = [&] {
     LocalCopyRegister<STAGE1_TABLE_DESCRIPTOR> desc {0};
     sanity_test(desc);
 
