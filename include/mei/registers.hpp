@@ -256,7 +256,7 @@ struct mixin {
     const auto reg_val = static_cast<const RegisterAccessor&>(*this).Get();
     constexpr auto mask = field_traits<F>::mask;
 
-    return f.ValInternalUse(reg_val & mask);
+    return f.ValFromRaw(reg_val & mask);
   }
 
   template<typename F>
@@ -401,6 +401,83 @@ constexpr auto ops::mixin<RegisterAccessor>::Extract() const noexcept {
 template<auto Field>
 using enum_t = field_traits<std::decay_t<decltype(Field)>>::enum_type;
 }  // namespace mei::registers
+
+namespace ktl::fmt {
+template<typename CharT, typename FV>
+  requires mei::registers::ops::belongs_to_same_register<FV>
+struct formatter<CharT, FV> {
+  template<typename FormatContext, typename FmtSpec>
+    requires std::same_as<CharT, typename FormatContext::char_type>
+  constexpr auto format(FormatContext& ctx, const FmtSpec& fmt_spec, const FV& fv) noexcept
+      -> expected<bool, Error> {
+    using field_traits = mei::registers::field_traits<typename FV::field_type>;
+    constexpr auto name = field_traits::field_type::name.view();
+
+    Try(r, ctx.template Format<"{}: [">(std::in_place, name));
+    if (!r)
+      return false;
+
+    auto val = fv.natural_val();
+    if constexpr (field_traits::is_enum) {
+      auto str = field_traits::EnumStr(val);
+      if (str) {
+        TryA(r, ctx.template Format<"{}">(std::in_place, *str));
+      } else {
+        TryA(r, ctx.template Format<"{}">(std::in_place, val));
+      }
+    } else {
+      TryA(r, ctx.template Format<"{}">(std::in_place, val));
+    }
+    if (!r)
+      return false;
+
+    return ctx.template Format<"]">(std::in_place, fmt_spec);
+  }
+};
+
+template<typename CharT, auto Register>
+struct formatter<CharT, mei::registers::LocalCopyRegister<Register>> {
+  template<typename FormatContext, typename FmtSpec>
+    requires std::same_as<CharT, typename FormatContext::char_type>
+  constexpr auto format(
+      FormatContext& ctx,
+      const FmtSpec& /* fmt_spec */,
+      const mei::registers::LocalCopyRegister<Register>& reg_val) noexcept
+      -> expected<bool, Error> {
+    using register_type = mei::registers::LocalCopyRegister<Register>::register_type;
+    constexpr auto name = register_type::name.view();
+    constexpr typename register_type::field_types fields {};
+
+    Try(r,
+        ctx.template Format<"{}: {{ {}">(std::in_place, name, reg_val.Read(std::get<0>(fields))));
+    if (!r)
+      return false;
+
+    TryA(r, format_impl<1>(ctx, reg_val, fields));
+    if (!r)
+      return false;
+
+    return ctx.template Format<" }}">(std::in_place);
+  }
+
+  template<usize I, typename FormatContext, typename... Fields>
+  constexpr auto format_impl(
+      FormatContext& ctx,
+      const mei::registers::LocalCopyRegister<Register>& reg_val,
+      const std::tuple<Fields...>& fields) noexcept -> expected<bool, Error> {
+    if constexpr (I == sizeof...(Fields)) {
+      return false;
+    } else if constexpr (I == sizeof...(Fields) - 1) {
+      return ctx.template Format<", {}">(std::in_place, reg_val.Read(std::get<I>(fields)));
+    } else {
+      Try(r, ctx.template Format<", {}">(std::in_place, reg_val.Read(std::get<I>(fields))));
+      if (!r)
+        return false;
+      return format_impl<I + 1>(ctx, reg_val, fields);
+    }
+  }
+};
+}  // namespace ktl::fmt
 
 #define DEFINE_SYSTEM_REGISTER(name, regtype, regname_str) \
   namespace defs { \

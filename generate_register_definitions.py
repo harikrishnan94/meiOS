@@ -136,7 +136,7 @@ def generate_field(field, regname: str, buffer: io.TextIOBase) -> str:
     write(buffer, "}\n")
 
     write(
-        buffer, f"[[nodiscard]] constexpr auto ValInternalUse(word_type v) const noexcept  {{\n")
+        buffer, f"[[nodiscard]] constexpr auto ValFromRaw(word_type v) const noexcept  {{\n")
     increase_indent_level()
     write(buffer, f"return Value<{name}_def, false, 0>{{v >> {offset}}};\n")
     decrease_indent_level()

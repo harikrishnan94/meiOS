@@ -1,6 +1,11 @@
+#include <ktl/test/platform.h>
+
+#include <ktl/static_string.hpp>
+
 #include "generated/test_regs.hpp"
 
 using namespace ktl;
+using namespace ktl::fmt::literals;
 
 auto main() -> int {
   using namespace mei::registers;
@@ -59,5 +64,25 @@ auto main() -> int {
     MemoryMappedRegister<STAGE1_TABLE_DESCRIPTOR> desc {&reg_val};
     sanity_test(desc);
   }
+
+  // Format test
+  [[maybe_unused]] static constinit auto format_test = [] {
+    LocalCopyRegister<TCR_EL1> desc {0};
+
+    static_string<1024> str;
+
+    check_(str.resize_uninitialized(1023), "");
+    fmt::fixed_buffer fb {str};
+
+    auto res = "{}"_f.format(fb, desc);
+    check_(res, "");
+
+    check_(str.resize(res->formatted_len()), "");
+    check_(
+        str == "TCR_EL1: { TBID1: [0], TBID0: [0], HD: [Disable], HA: [Disable], TBI1: [Used], TBI0: [Used], AS: [ASID8Bits], IPS: [Bits_32], TG1: [0], SH1: [None], ORGN1: [NonCacheable], IRGN1: [NonCacheable], EPD1: [EnableTTBR1Walks], A1: [TTBR0], T1SZ: [0], TG0: [KiB_4], SH0: [None], ORGN0: [NonCacheable], IRGN0: [NonCacheable], EPD0: [EnableTTBR0Walks], T0SZ: [0] }",
+        "");
+
+    return 0;
+  }();
   return 0;
 }

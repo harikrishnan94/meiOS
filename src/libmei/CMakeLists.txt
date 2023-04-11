@@ -3,7 +3,7 @@ include(FetchContent)
 FetchContent_Declare(
     ktl
     GIT_REPOSITORY https://github.com/harikrishnan94/ktl
-    GIT_TAG "0.0.3"
+    GIT_TAG "fe656977733fff599369e539c61bee07a396236a"
 )
 FetchContent_MakeAvailable(ktl)
 
