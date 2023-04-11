@@ -45,10 +45,10 @@ namespaces:
 
               - Attr7_Normal_Inner:
                 56,4:
-                  WriteThrough_Transient: 0x0000
-                  WriteThrough_Transient_WriteAlloc: 0x0001
-                  WriteThrough_Transient_ReadAlloc: 0x0010
-                  WriteThrough_Transient_ReadWriteAlloc: 0x0011
+                  WriteThrough_Transient: 0b0000
+                  WriteThrough_Transient_WriteAlloc: 0b0001
+                  WriteThrough_Transient_ReadAlloc: 0b0010
+                  WriteThrough_Transient_ReadWriteAlloc: 0b0011
 
                   NonCacheable: 0b0100
                   WriteBack_Transient_WriteAlloc: 0b0101
@@ -98,10 +98,10 @@ namespaces:
 
               - Attr6_Normal_Inner:
                 48,4:
-                  WriteThrough_Transient: 0x0000
-                  WriteThrough_Transient_WriteAlloc: 0x0001
-                  WriteThrough_Transient_ReadAlloc: 0x0010
-                  WriteThrough_Transient_ReadWriteAlloc: 0x0011
+                  WriteThrough_Transient: 0b0000
+                  WriteThrough_Transient_WriteAlloc: 0b0001
+                  WriteThrough_Transient_ReadAlloc: 0b0010
+                  WriteThrough_Transient_ReadWriteAlloc: 0b0011
 
                   NonCacheable: 0b0100
                   WriteBack_Transient_WriteAlloc: 0b0101
@@ -151,10 +151,10 @@ namespaces:
 
               - Attr5_Normal_Inner:
                 40,4:
-                  WriteThrough_Transient: 0x0000
-                  WriteThrough_Transient_WriteAlloc: 0x0001
-                  WriteThrough_Transient_ReadAlloc: 0x0010
-                  WriteThrough_Transient_ReadWriteAlloc: 0x0011
+                  WriteThrough_Transient: 0b0000
+                  WriteThrough_Transient_WriteAlloc: 0b0001
+                  WriteThrough_Transient_ReadAlloc: 0b0010
+                  WriteThrough_Transient_ReadWriteAlloc: 0b0011
 
                   NonCacheable: 0b0100
                   WriteBack_Transient_WriteAlloc: 0b0101
@@ -204,10 +204,10 @@ namespaces:
 
               - Attr4_Normal_Inner:
                 32,4:
-                  WriteThrough_Transient: 0x0000
-                  WriteThrough_Transient_WriteAlloc: 0x0001
-                  WriteThrough_Transient_ReadAlloc: 0x0010
-                  WriteThrough_Transient_ReadWriteAlloc: 0x0011
+                  WriteThrough_Transient: 0b0000
+                  WriteThrough_Transient_WriteAlloc: 0b0001
+                  WriteThrough_Transient_ReadAlloc: 0b0010
+                  WriteThrough_Transient_ReadWriteAlloc: 0b0011
 
                   NonCacheable: 0b0100
                   WriteBack_Transient_WriteAlloc: 0b0101
@@ -257,10 +257,10 @@ namespaces:
 
               - Attr3_Normal_Inner:
                 24,4:
-                  WriteThrough_Transient: 0x0000
-                  WriteThrough_Transient_WriteAlloc: 0x0001
-                  WriteThrough_Transient_ReadAlloc: 0x0010
-                  WriteThrough_Transient_ReadWriteAlloc: 0x0011
+                  WriteThrough_Transient: 0b0000
+                  WriteThrough_Transient_WriteAlloc: 0b0001
+                  WriteThrough_Transient_ReadAlloc: 0b0010
+                  WriteThrough_Transient_ReadWriteAlloc: 0b0011
 
                   NonCacheable: 0b0100
                   WriteBack_Transient_WriteAlloc: 0b0101
@@ -310,10 +310,10 @@ namespaces:
 
               - Attr2_Normal_Inner:
                 16,4:
-                  WriteThrough_Transient: 0x0000
-                  WriteThrough_Transient_WriteAlloc: 0x0001
-                  WriteThrough_Transient_ReadAlloc: 0x0010
-                  WriteThrough_Transient_ReadWriteAlloc: 0x0011
+                  WriteThrough_Transient: 0b0000
+                  WriteThrough_Transient_WriteAlloc: 0b0001
+                  WriteThrough_Transient_ReadAlloc: 0b0010
+                  WriteThrough_Transient_ReadWriteAlloc: 0b0011
 
                   NonCacheable: 0b0100
                   WriteBack_Transient_WriteAlloc: 0b0101
@@ -363,10 +363,10 @@ namespaces:
 
               - Attr1_Normal_Inner:
                 8,4:
-                  WriteThrough_Transient: 0x0000
-                  WriteThrough_Transient_WriteAlloc: 0x0001
-                  WriteThrough_Transient_ReadAlloc: 0x0010
-                  WriteThrough_Transient_ReadWriteAlloc: 0x0011
+                  WriteThrough_Transient: 0b0000
+                  WriteThrough_Transient_WriteAlloc: 0b0001
+                  WriteThrough_Transient_ReadAlloc: 0b0010
+                  WriteThrough_Transient_ReadWriteAlloc: 0b0011
 
                   NonCacheable: 0b0100
                   WriteBack_Transient_WriteAlloc: 0b0101
@@ -416,10 +416,10 @@ namespaces:
 
               - Attr0_Normal_Inner:
                 0,4:
-                  WriteThrough_Transient: 0x0000
-                  WriteThrough_Transient_WriteAlloc: 0x0001
-                  WriteThrough_Transient_ReadAlloc: 0x0010
-                  WriteThrough_Transient_ReadWriteAlloc: 0x0011
+                  WriteThrough_Transient: 0b0000
+                  WriteThrough_Transient_WriteAlloc: 0b0001
+                  WriteThrough_Transient_ReadAlloc: 0b0010
+                  WriteThrough_Transient_ReadWriteAlloc: 0b0011
 
                   NonCacheable: 0b0100
                   WriteBack_Transient_WriteAlloc: 0b0101
