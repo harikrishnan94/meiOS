@@ -29,10 +29,10 @@ RUN sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen && \
     locale-gen
 
 RUN (echo '#!/usr/bin/env bash' && \
-    echo 'echo bashit enable plugin alias-completion colors edit-mode-vi explain extract git gitstatus git-subrepo history-eternal history history-search history-substring-search man projects sudo' && \
-    echo 'echo bashit enable alias apt bash-it git tmux vim'
-    echo 'echo bashit enable completion defaults export git github-cli makefile pip3 tmux'
-    ) > ~/show-enable-bashit-common
+    echo 'echo bashit enable plugin alias-completion colors edit-mode-vi explain extract git gitstatus git-subrepo history-eternal' \
+    'history history-search history-substring-search man projects sudo' -n \
+    'echo bashit enable alias apt bash-it git tmux vim' -n \
+    'echo bashit enable completion defaults export git github-cli makefile pip3 tmux') > /show-enable-bashit-common
 
 # Install aarch64-none-elf-gcc
 ARG AARCH64_ELF_GCC_VER=12.2.rel1
