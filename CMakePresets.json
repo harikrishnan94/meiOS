@@ -108,7 +108,8 @@
                 "CMAKE_BUILD_TYPE": "Debug",
                 "KTL_ENABLE_TESTS": true,
                 "MEI_ENABLE_CORE_TESTS": true,
-                "CMAKE_CXX_FLAGS": "-fsanitize=undefined"
+                "CMAKE_CXX_FLAGS": "-fsanitize=address -fsanitize=undefined",
+                "CMAKE_EXE_LINKER_FLAGS": "-lasan -lubsan -lstdc++"
             }
         },
         {
@@ -121,7 +122,8 @@
                 "KTL_ENABLE_TESTS": true,
                 "KTL_ENABLE_CHECKS": true,
                 "MEI_ENABLE_CORE_TESTS": true,
-                "CMAKE_CXX_FLAGS": "-fsanitize=undefined"
+                "CMAKE_CXX_FLAGS": "-fsanitize=address -fsanitize=undefined",
+                "CMAKE_EXE_LINKER_FLAGS": "-lasan -lubsan -lstdc++"
             }
         }
     ],
