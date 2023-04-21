@@ -34,6 +34,12 @@ RUN (echo '#!/usr/bin/env bash' && \
     'echo bashit enable alias apt bash-it git tmux vim' -n \
     'echo bashit enable completion defaults export git github-cli makefile pip3 tmux') > /show-enable-bashit-common
 
+# Set timezone
+RUN apt update && \
+    apt install -yq tzdata && \
+    ln -fs /usr/share/zoneinfo/America/Kolkata /etc/localtime && \
+    dpkg-reconfigure -f noninteractive tzdata
+
 # Install aarch64-none-elf-gcc
 ARG AARCH64_ELF_GCC_VER=12.2.rel1
 RUN dpkgArch="$(dpkg --print-architecture)"; \
