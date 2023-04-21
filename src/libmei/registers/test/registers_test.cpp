@@ -1,11 +1,17 @@
-#include <ktl/test/platform.h>
-
 #include <ktl/static_string.hpp>
+#include <ktl/test/platform.hpp>
 
 #include "generated/test_regs.hpp"
 
 using namespace ktl;
 using namespace ktl::fmt::literals;
+
+namespace mei::test::test_regs {
+DEF_MEM_MAPD_DEV(uart, ktl::u32, 100, {
+  DEF_MEM_MAPD_DEV_REG(MAIR_EL1, 0, mair_el1);
+  DEF_MEM_MAPD_DEV_REG(test_regs::TCR_EL1, 0, tcr_el1);
+});
+}
 
 auto main() -> int {
   using namespace mei::registers;
@@ -80,5 +86,13 @@ auto main() -> int {
 
     return 0;
   }();
+
+  // MemoryMapped Device test
+  {
+    uart::word_type reg[uart::num_words] = {};
+    auto* uart_dev = uart::at(&reg[0]);
+    check_(!uart_dev->mair_el1.IsSet(MAIR_EL1.Attr0_Device), "");
+    check_(!uart_dev->tcr_el1.IsSet(TCR_EL1.HA), "");
+  }
   return 0;
 }

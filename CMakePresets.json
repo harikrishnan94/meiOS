@@ -109,7 +109,7 @@
                 "KTL_ENABLE_TESTS": true,
                 "MEI_ENABLE_CORE_TESTS": true,
                 "CMAKE_CXX_FLAGS": "-fsanitize=address -fsanitize=undefined",
-                "CMAKE_EXE_LINKER_FLAGS": "-lasan -lubsan -lstdc++"
+                "CMAKE_EXE_LINKER_FLAGS": "-lasan -lubsan"
             }
         },
         {
@@ -121,9 +121,17 @@
                 "CMAKE_BUILD_TYPE": "Release",
                 "KTL_ENABLE_TESTS": true,
                 "KTL_ENABLE_CHECKS": true,
-                "MEI_ENABLE_CORE_TESTS": true,
+                "MEI_ENABLE_CORE_TESTS": true
+            }
+        },
+        {
+            "name": "coretests-rel-san",
+            "displayName": "CoreTests in release mode with sanitizer enabled",
+            "description": "Tests that runs on HOST, used to test core infrastucture/library section of the code",
+            "inherits": "coretests-rel",
+            "cacheVariables": {
                 "CMAKE_CXX_FLAGS": "-fsanitize=address -fsanitize=undefined",
-                "CMAKE_EXE_LINKER_FLAGS": "-lasan -lubsan -lstdc++"
+                "CMAKE_EXE_LINKER_FLAGS": "-lasan -lubsan"
             }
         }
     ],

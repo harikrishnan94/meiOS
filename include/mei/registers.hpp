@@ -400,6 +400,26 @@ constexpr auto ops::mixin<RegisterAccessor>::Extract() const noexcept {
 
 template<auto Field>
 using enum_t = field_traits<std::decay_t<decltype(Field)>>::enum_type;
+
+template<auto Register, ktl::usize Offset>
+struct MemoryMappedDeviceRegister: public ops::mixin<MemoryMappedDeviceRegister<Register, Offset>> {
+  using register_type = std::decay_t<decltype(Register)>;
+  using word_type = register_type::word_type;
+
+  static_assert(register_like<register_type>);
+
+  auto Get() const noexcept -> word_type {
+    auto self = std::bit_cast<uintptr_t>(this);
+    check_(self % sizeof(word_type) == 0, "register address must be properly aligned");
+    return *std::bit_cast<volatile const word_type*>(self + Offset);
+  }
+
+  void Set(word_type val) noexcept {
+    auto self = std::bit_cast<uintptr_t>(this);
+    check_(self % sizeof(word_type) == 0, "register address must be properly aligned");
+    *std::bit_cast<volatile word_type*>(self + Offset) = val;
+  }
+};
 }  // namespace mei::registers
 
 namespace ktl::fmt {
@@ -504,3 +524,25 @@ struct formatter<CharT, mei::registers::LocalCopyRegister<Register>> {
   }; \
   } \
   inline defs::name CONCAT(name, _sys)
+
+#define DEF_MEM_MAPD_DEV(dev_name, word_type_, size_, registers_definitions) \
+  struct alignas(word_type_) dev_name { \
+    using word_type = word_type_; \
+    static constexpr ::ktl::usize size = size_; \
+    static constexpr ::ktl::usize num_words = size / sizeof(word_type); \
+\
+    static_assert( \
+        (size) % sizeof(word_type) == 0, \
+        "device size must be aligned to register word_type"); \
+    struct device registers_definitions dev [[no_unique_address]]; \
+    static auto at(::ktl::not_null<word_type*> base_address) noexcept -> device* { \
+      return std::bit_cast<device*>(base_address); \
+    } \
+  }
+
+#define DEF_MEM_MAPD_DEV_REG(regname, offset, access_name) \
+  [[no_unique_address]] ::mei::registers::MemoryMappedDeviceRegister<regname, offset> access_name; \
+  static_assert( \
+      (offset) % sizeof(word_type) == 0, \
+      "register offset must be aligned to register word_type"); \
+  static_assert((offset) < (size), "register must be within device size")
