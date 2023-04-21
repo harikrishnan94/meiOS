@@ -1,5 +1,6 @@
 #![cfg_attr(feature = "no_std", no_std)]
 #![feature(
+    const_for,
     naked_functions,
     asm_const,
     const_trait_impl,

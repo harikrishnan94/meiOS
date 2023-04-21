@@ -278,7 +278,10 @@ struct Slab {
 const MIN_ALIGN_SIZE: usize = 16;
 const MAX_OBJECT_SIZE: usize = 2048;
 
-const fn bin_count(max_alloc_size: usize) -> usize {}
+const fn bin_count(max_alloc_size: usize) -> usize {
+    for _ in 1..10 {}
+    0
+}
 
 impl Slab {
     fn new() -> Self {
@@ -368,5 +371,51 @@ impl Debug for PageHdr {
             .field("free_list", &free_list)
             .field("slab_bin_id", &slab_bin_id)
             .finish()
+    }
+}
+
+#[cxx::bridge(namespace = "mei::vm::slab")]
+mod ffi {
+    struct Layout {
+        size: usize,
+        align: usize,
+    }
+
+    enum AllocError {
+        Success,
+        OOM,
+        ExceedsMaxAllocSize,
+        UnknownPtr,
+    }
+
+    struct AllocResult {
+        error: AllocError,
+        mem: *mut u8,
+    }
+
+    #[derive(Copy, Clone)]
+    struct UpstreamAllocator {
+        ptr: *const u8,
+    }
+
+    unsafe extern "C++" {
+        include!("libmei/src/vm/slab.hpp");
+
+        unsafe fn Init(
+            phy_start: *mut u8,
+            phy_end: *mut u8,
+            initalize_upstream: unsafe fn(
+                phy_start: *mut u8,
+                phy_end: *mut u8,
+            ) -> UpstreamAllocator,
+            alloc_page: fn(up_alloc: UpstreamAllocator, size: usize),
+            free_page: unsafe fn(up_alloc: UpstreamAllocator, page_ptr: *mut u8, size: usize),
+        ) -> bool;
+
+        fn Alloc(layout: &Layout) -> AllocResult;
+
+        unsafe fn Free(ptr: *mut u8, layout: &Layout) -> AllocResult;
+
+        unsafe fn GetUpstreamAllocator() -> UpstreamAllocator;
     }
 }
