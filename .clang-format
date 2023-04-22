@@ -44,12 +44,16 @@ IncludeCategories:
     Priority: 3
     SortPriority: 0
     CaseSensitive: false
-  - Regex: "^<.*"
-    Priority: 1
+  - Regex: '^<mei/.*\.hpp>'
+    Priority: 4
     SortPriority: 0
     CaseSensitive: false
-  - Regex: ".*"
-    Priority: 4
+  - Regex: '^".*"'
+    Priority: 5
+    SortPriority: 0
+    CaseSensitive: false
+  - Regex: "^<.*"
+    Priority: 1
     SortPriority: 0
     CaseSensitive: false
 IncludeIsMainRegex: "([-_](test|unittest))?$"

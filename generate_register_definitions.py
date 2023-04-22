@@ -177,11 +177,12 @@ def generate_register(name: str, type: str, system_name: str, fields: list, buff
     decrease_indent_level()
     write(buffer, "}\n")
 
-    write(buffer, f"inline constexpr detail::{name} {name};\n")
+    write(buffer, f"using {name}_t = detail::{name};\n")
+    write(buffer, f"inline constexpr {name}_t {name};\n")
 
     if system_name != None:
         write(buffer,
-              f"DEFINE_SYSTEM_REGISTER({name}, detail::{name}, \"{system_name}\");\n")
+              f"DEFINE_SYSTEM_REGISTER({name}, {name}_t, \"{system_name}\");\n")
 
 
 def generate_namespace(nsp: str, registers: list, buffer: io.TextIOBase):
