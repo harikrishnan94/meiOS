@@ -193,7 +193,7 @@ constexpr auto out_addr_covered_per_entry = [] {
 }();
 
 template<control_like Control, ktl::u32 Level>
-  requires(Level < Control::bits_in_level.size())
+  requires(Level < nbits_for_level<Control>.size())
 constexpr auto GetIndexForLevel(VirtualAddress vaddr) -> ktl::u32 {
   constexpr auto offset = ktl::at(start_bit_for_level<Control>, Level);
   constexpr auto count = ktl::at(nbits_for_level<Control>, Level);
@@ -202,13 +202,21 @@ constexpr auto GetIndexForLevel(VirtualAddress vaddr) -> ktl::u32 {
 
 // Extracts the top MSB (excluding Top Byte if ignored).
 template<control_like Control>
-constexpr auto GetTopBits(VirtualAddress vaddr) noexcept -> bool {
+constexpr auto GetTopBits(VirtualAddress vaddr) noexcept {
   return Extract(vaddr, virtual_address_space_bits<Control>, unused_msb<Control>);
+}
+
+// Validate Virtual Address. TopBits must all be set to 1 or 0.
+template<control_like Control>
+constexpr auto IsValid(VirtualAddress vaddr) noexcept -> bool {
+  auto top_bits = GetTopBits<Control>(vaddr);
+  return (top_bits == 0)
+      || (top_bits == ktl::CreateMask<std::decay_t<decltype(top_bits)>>(0, unused_msb<Control>));
 }
 
 // Extracts the top byte
 template<control_like Control>
-constexpr auto GetTopByte(VirtualAddress vaddr) noexcept -> bool {
+constexpr auto GetTopByte(VirtualAddress vaddr) noexcept {
   return Extract(
       vaddr,
       virtual_address_bits<Control> - detail::bits_per_byte,
@@ -249,6 +257,13 @@ static_assert(out_addr_covered_per_entry<cntrl>[0] == 14'07'37'48'83'55'328);
 static_assert(out_addr_covered_per_entry<cntrl>[1] == 68'71'94'76'736);
 static_assert(out_addr_covered_per_entry<cntrl>[2] == 3'35'54'432);
 static_assert(out_addr_covered_per_entry<cntrl>[3] == 16'384);
+
+static_assert(GetTopByte<cntrl>({.value = 0xCA00'0000'0000'0000}) == 0xCA);
+static_assert(GetTopBits<cntrl>({.value = 0x00DE'0000'0000'0000}) == 0xDE);
+static_assert(!IsValid<cntrl>({.value = 0x00DE'0000'0000'0000}));
+static_assert(!IsValid<cntrl>({.value = 0xFFDE'0000'0000'0000}));
+static_assert(IsValid<cntrl>({.value = 0xFF00'0000'0000'0000}));
+static_assert(IsValid<cntrl>({.value = 0xFFFF'0000'0000'0000}));
 }  // namespace test
 // NOLINTEND(*-dynamic-static-initializers, *-magic-numbers)
 }  // namespace mei::vm::translation

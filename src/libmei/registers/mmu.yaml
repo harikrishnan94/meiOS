@@ -898,6 +898,66 @@ namespaces:
                   False: 0
                   True: 1
 
+        # A level 1/2 block or level 3 page descriptor.
+        - register:
+            name: STAGE1_LAST_LEVEL_DESCRIPTOR
+            type: u64
+            fields:
+              # Bits for Software Use
+              - SWUSE: 55,4
+
+              # Unprivileged execute-never.
+              - UXN:
+                54,1:
+                  False: 0
+                  True: 1
+
+              # Unprivileged execute-never.
+              - PXN:
+                53,1:
+                  False: 0
+                  True: 1
+
+              # Bits [47:12] of Output Address. Points to a 4KiB Physical Page.
+              - OUTPUT_ADDR_4KiB: 12,36
+              # Bits [47:21] of Output Address. Points to a 2MiB Physical Page. (Level 2)
+              - OUTPUT_ADDR_2MiB: 21,27
+              # Bits [47:30] of Output Address. Points to a 1GiB Physical Page. (Level 1)
+              - OUTPUT_ADDR_1GiB: 30,18
+
+              # Access flag.
+              - AF:
+                10,1:
+                  True: 1
+                  False: 0
+
+              # Shareability field.
+              - SH:
+                8,2:
+                  OuterShareable: 0b10
+                  InnerShareable: 0b11
+
+              # Access Permissions.
+              - AP:
+                6,2:
+                  RW_EL1: 0b00
+                  RW_EL1_EL0: 0b01
+                  RO_EL1: 0b10
+                  RO_EL1_EL0: 0b11
+
+              # Memory attributes index into the MAIR_EL1 register.
+              - AttrIndx: 2,3
+
+              - TYPE:
+                1:
+                  Reserved_Invalid: 1
+                  Block: 0
+
+              - Valid:
+                0:
+                  False: 0
+                  True: 1
+
         # Virtual Address with 4KB granule and 4 level translation
         - register:
             name: VA
@@ -925,3 +985,4 @@ namespaces:
 
               # TTBR select
               - TTBR_Select: 48,16
+
