@@ -33,6 +33,15 @@ struct invalid_descriptor {
 using descriptor =
     std::variant<invalid_descriptor, table_descriptor, block_descriptor, page_descriptor>;
 
+template<
+    typename Desc,
+    typename From,
+    typename DescPtr =
+        std::add_pointer_t<std::conditional_t<std::is_const_v<From>, std::add_const_t<Desc>, Desc>>>
+static auto desc_cast(From& desc) noexcept -> decltype(*std::declval<DescPtr>()) {
+  return *std::bit_cast<DescPtr>(&desc);
+}
+
 // Is a descriptor valid?
 static constexpr auto is_valid(desc_t desc) noexcept {
   // Any descriptor type can be used here, to check if a descriptor is valid.
@@ -115,18 +124,18 @@ static constexpr auto decode_last_level_desc(desc_t desc) noexcept
 // Decode a descriptor (as either Table, Block or Page) and process it accordingly.
 // Level information is needed to distinguish b/w table and page descriptor.
 // If a Block descriptor is found in-appropriately level, throw error.
-template<desc_ops_like Ops, ktl::u32 Level, typename Result>
-  requires ktl::detail::is_expected<Result>::value
+template<desc_ops_like Ops, ktl::u32 Level, typename Result, typename DescT>
+  requires ktl::detail::is_expected<Result>::value && std::same_as<std::decay_t<DescT>, desc_t>
 static constexpr auto process_desc(
-    desc_t desc,
+    DescT& desc,
     auto&& table_descriptor_cb,
     auto&& block_descriptor_cb,
     auto&& page_descriptor_cb,
     auto&& invalid_descriptor_cb) noexcept -> Result {
-  table_descriptor tbl_desc {desc};
+  auto& tbl_desc = desc_cast<table_descriptor>(desc);
   // Is Valid?
   if (!tbl_desc.IsSet(regs::STAGE1_TABLE_DESCRIPTOR.Valid)) {
-    return invalid_descriptor_cb(invalid_descriptor {desc});
+    return invalid_descriptor_cb(desc_cast<invalid_descriptor>(desc));
   }
 
   // Table and Page descriptors both have bits [0:1] set to 0b11.
@@ -134,7 +143,7 @@ static constexpr auto process_desc(
   if (tbl_desc.MatchesAny(regs::STAGE1_TABLE_DESCRIPTOR.TYPE.Table)) {
     // Last level descriptors must be a page descriptor
     if constexpr (Level == num_levels<typename Ops::control> - 1) {
-      return page_descriptor_cb(page_descriptor {desc});
+      return page_descriptor_cb(desc_cast<page_descriptor>(desc));
     } else {
       return table_descriptor_cb(tbl_desc);
     }
@@ -142,7 +151,7 @@ static constexpr auto process_desc(
 
   // Must be a block descriptor
   if constexpr (Ops::can_have_block_desc_at(Level)) {
-    return block_descriptor_cb(block_descriptor {desc});
+    return block_descriptor_cb(desc_cast<block_descriptor>(desc));
   } else {
     Throw(error::CorruptedTable);
   }
@@ -151,11 +160,11 @@ static constexpr auto process_desc(
 template<
     desc_ops_like Ops,
     ktl::u32 Level,
-    bool IsConst,
+    typename DescriptorT,
     typename DescTable = DescriptorTable<typename Ops::control>,
-    typename Ptr =
-        std::add_pointer_t<std::conditional_t<IsConst, std::add_const_t<DescTable>, DescTable>>>
-static auto descend_tree(table_descriptor tdesc) -> ktl::not_null<Ptr> {
+    typename Ptr = std::add_pointer_t<
+        std::conditional_t<std::is_const_v<DescriptorT>, std::add_const_t<DescTable>, DescTable>>>
+static auto descend_tree(DescriptorT& tdesc) -> ktl::not_null<Ptr> {
   return std::bit_cast<Ptr>(Ops::template get_next_level_desc<Level>(tdesc));
 }
 
@@ -174,21 +183,21 @@ template<
   };
 
   auto idx = GetIndexForLevel<typename Ops::control, Level>(vaddr);
-  auto desc = ktl::at(root.data, idx);
+  const auto& desc = ktl::at(root.data, idx);
 
   return process_desc<Ops, Level, result>(
       desc,
-      [&](auto tdesc) {
-        const auto& children = *descend_tree<Ops, Level, true>(tdesc);
+      [&](const auto& tdesc) {
+        const auto& children = *descend_tree<Ops, Level>(tdesc);
         return lookup<Ops, Level + 1>(children, vaddr);
       },
-      [&](auto bdesc) {
+      [&](const auto& bdesc) {
         return to_memory_map(bdesc, Ops::template get_output_address<Level>(bdesc));
       },
-      [&](auto pdesc) {
+      [&](const auto& pdesc) {
         return to_memory_map(pdesc, Ops::template get_output_address<Level>(pdesc));
       },
-      [](auto /* desc */) -> result { return {}; });
+      [](const auto& /* desc */) -> result { return {}; });
 }
 }  // namespace detail
 
