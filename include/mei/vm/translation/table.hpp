@@ -29,16 +29,15 @@ struct invalid_descriptor {
   desc_t val;
 };
 
-// Any descriptor
-using descriptor =
-    std::variant<invalid_descriptor, table_descriptor, block_descriptor, page_descriptor>;
-
+// Cast raw descriptor into, corresponding LocalCopyDescriptor.
 template<
     typename Desc,
     typename From,
     typename DescPtr =
         std::add_pointer_t<std::conditional_t<std::is_const_v<From>, std::add_const_t<Desc>, Desc>>>
 static auto desc_cast(From& desc) noexcept -> decltype(*std::declval<DescPtr>()) {
+  static_assert(sizeof(Desc) == sizeof(From));
+  static_assert(std::is_standard_layout_v<Desc> && std::is_standard_layout_v<From>);
   return *std::bit_cast<DescPtr>(&desc);
 }
 
@@ -48,8 +47,11 @@ static constexpr auto is_valid(desc_t desc) noexcept {
   return table_descriptor {desc}.IsSet(regs::STAGE1_TABLE_DESCRIPTOR.Valid);
 }
 
-static constexpr auto
-to_raw_attributes(AccessPermissions access_perms, MemoryKind mem_kind) noexcept -> desc_t {
+// Helpers to encode and decode attributes: `AccessPermissions` and `MemoryKind`
+namespace attrs {
+// Encode attributes into raw descriptor value
+static constexpr auto encode(AccessPermissions access_perms, MemoryKind mem_kind) noexcept
+    -> desc_t {
   last_level_descriptor desc {};
   bool el1_ro = access_perms.el1_read;
   auto el1_rw = access_perms.el1_read && access_perms.el1_write;
@@ -86,8 +88,8 @@ to_raw_attributes(AccessPermissions access_perms, MemoryKind mem_kind) noexcept 
   return desc.Get();
 }
 
-static constexpr auto decode_last_level_desc(desc_t desc) noexcept
-    -> std::pair<AccessPermissions, MemoryKind> {
+// Decode attributes from raw descriptor value into `AccessPermissions` and `MemoryKind`
+static constexpr auto decode(desc_t desc) noexcept -> std::pair<AccessPermissions, MemoryKind> {
   AccessPermissions access_perms = {};
   last_level_descriptor ap {desc};
 
@@ -120,6 +122,7 @@ static constexpr auto decode_last_level_desc(desc_t desc) noexcept
   bool is_cacheable = !ap.MatchesAny(regs::STAGE1_LAST_LEVEL_DESCRIPTOR.SH.OuterShareable);
   return {access_perms, is_cacheable ? MemoryKind::Normal : MemoryKind::Device};
 }
+}  // namespace attrs
 
 // Decode a descriptor (as either Table, Block or Page) and process it accordingly.
 // Level information is needed to distinguish b/w table and page descriptor.
@@ -157,6 +160,10 @@ static constexpr auto process_desc(
   }
 }
 
+// Follow the `next_level_desc` referenced by `tdesc` and return a table_descritor (table of
+// descriptor entries).
+// Const correctness of `tdesc` in maintained (ie) returned type will have the same constness (or
+// lack it thereof)
 template<
     desc_ops_like Ops,
     ktl::u32 Level,
@@ -176,7 +183,7 @@ template<
     typename result = Result<MemoryMap>>
 [[nodiscard]] static auto lookup(const DescriptorTable& root, VirtualAddress vaddr) -> result {
   auto to_memory_map = [&](auto desc, uintptr_t paddr) {
-    auto [access_perms, mem_kind] = decode_last_level_desc(desc.Get());
+    auto [access_perms, mem_kind] = attrs::decode(desc.Get());
     MapDesc map_desc =
         {.phy_addr = {paddr}, .virt_addr = vaddr, .num_pages = 1, .access_perms = access_perms};
     return MemoryMap {.kind = mem_kind, .desc = map_desc};
