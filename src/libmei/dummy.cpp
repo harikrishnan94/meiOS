@@ -32,7 +32,7 @@ struct FourKiBGranuleOps {
       return bdesc.Read(regs::STAGE1_BLOCK_DESCRIPTOR.OUTPUT_ADDR_2MiB).get()
           << ktl::at(start_bit_for_level<Control>, Level);
     } else {
-      assert(false);
+      unreachable();
     }
   }
 
@@ -46,7 +46,7 @@ struct FourKiBGranuleOps {
     } else if constexpr (Level == 2) {
       bdesc.Modify(regs::STAGE1_BLOCK_DESCRIPTOR.OUTPUT_ADDR_2MiB(output_address));
     } else {
-      assert(false);
+      unreachable();
     }
   }
 
