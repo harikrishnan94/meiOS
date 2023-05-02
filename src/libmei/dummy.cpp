@@ -76,8 +76,6 @@ using control = Control<
     param::GranuleBits<12>,
     param::MaxBitsPerLevel<9>>;
 auto my_virt2phy(const DescriptorTable<control>& root, VirtualAddress vaddr) {
-  FourKiBGranuleOps<control>::get_next_level_desc<0>({});
-
   return Virt2Phy<FourKiBGranuleOps<control>>(root, vaddr);
 }
 }  // namespace mei::vm::translation
