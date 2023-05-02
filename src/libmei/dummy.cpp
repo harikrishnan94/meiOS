@@ -11,7 +11,7 @@ struct FourKiBGranuleOps {
   template<ktl::u32 Level>
   static constexpr auto get_next_level_desc(detail::table_descriptor tdesc) noexcept -> uintptr_t {
     static_assert(Level != num_levels<Control> - 1);
-    return tdesc.Read(regs::STAGE1_TABLE_DESCRIPTOR.NEXT_LEVEL_TABLE_ADDR).natural_val()
+    return tdesc.Read(regs::STAGE1_TABLE_DESCRIPTOR.NEXT_LEVEL_TABLE_ADDR).get()
         << granule_bits<Control>;
   }
 
@@ -26,10 +26,10 @@ struct FourKiBGranuleOps {
   static constexpr auto get_output_address(detail::block_descriptor bdesc) noexcept -> uintptr_t {
     static_assert(can_have_block_desc_at(Level));
     if constexpr (Level == 1) {
-      return bdesc.Read(regs::STAGE1_BLOCK_DESCRIPTOR.OUTPUT_ADDR_1GiB).natural_val()
+      return bdesc.Read(regs::STAGE1_BLOCK_DESCRIPTOR.OUTPUT_ADDR_1GiB).get()
           << ktl::at(start_bit_for_level<Control>, Level);
     } else if constexpr (Level == 2) {
-      return bdesc.Read(regs::STAGE1_BLOCK_DESCRIPTOR.OUTPUT_ADDR_2MiB).natural_val()
+      return bdesc.Read(regs::STAGE1_BLOCK_DESCRIPTOR.OUTPUT_ADDR_2MiB).get()
           << ktl::at(start_bit_for_level<Control>, Level);
     } else {
       assert(false);
@@ -53,8 +53,7 @@ struct FourKiBGranuleOps {
   template<ktl::u32 Level>
   static constexpr auto get_output_address(detail::page_descriptor pdesc) noexcept -> uintptr_t {
     static_assert(Level == num_levels<Control> - 1);
-    return pdesc.Read(regs::STAGE1_PAGE_DESCRIPTOR.OUTPUT_ADDR_4KiB).natural_val()
-        << granule_bits<Control>;
+    return pdesc.Read(regs::STAGE1_PAGE_DESCRIPTOR.OUTPUT_ADDR_4KiB).get() << granule_bits<Control>;
   }
 
   template<ktl::u32 Level>

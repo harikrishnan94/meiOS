@@ -203,6 +203,10 @@ struct GenericField {
       }
     }
 
+    constexpr auto get() const noexcept -> register_type::word_type {
+      return natural_val();
+    }
+
     [[no_unique_address]] std::conditional_t<IsConst, empty, typename register_type::word_type>
         m_val;
   };

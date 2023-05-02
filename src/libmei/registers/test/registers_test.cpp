@@ -29,7 +29,7 @@ auto main() -> int {
         desc.Read(STAGE1_TABLE_DESCRIPTOR.NEXT_LEVEL_TABLE_ADDR)
             == STAGE1_TABLE_DESCRIPTOR.NEXT_LEVEL_TABLE_ADDR(0xFFFF),
         "");
-    check_(desc.Read(STAGE1_TABLE_DESCRIPTOR.NEXT_LEVEL_TABLE_ADDR).natural_val() == 0xFFFF, "");
+    check_(desc.Read(STAGE1_TABLE_DESCRIPTOR.NEXT_LEVEL_TABLE_ADDR).get() == 0xFFFF, "");
     check_(desc.IsSet(STAGE1_TABLE_DESCRIPTOR.TYPE), "");
     check_(
         desc.ReadEnum(STAGE1_TABLE_DESCRIPTOR.TYPE) == enum_t<STAGE1_TABLE_DESCRIPTOR.TYPE>::Table,
