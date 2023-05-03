@@ -1,5 +1,7 @@
 #pragma once
 
+#include <ktl/generator.hpp>
+
 #include <mei/result.hpp>
 #include <mei/vm/memory_map_desc.hpp>
 
@@ -28,6 +30,13 @@ namespace detail {
 struct invalid_descriptor {
   desc_t val;
 };
+
+// Block Descriptor can't be present first and last level.
+template<control_like Control, ktl::u32 Level>
+  requires(Level < num_levels<Control>)
+static constexpr auto can_have_block_descriptor() {
+  return Level == 0 && Level == num_levels<Control> - 1;
+}
 
 // Cast raw descriptor into, corresponding LocalCopyDescriptor.
 template<
@@ -153,7 +162,7 @@ static constexpr auto process_desc(
   }
 
   // Must be a block descriptor
-  if constexpr (Ops::can_have_block_desc_at(Level)) {
+  if constexpr (can_have_block_descriptor<typename Ops::control, Level>()) {
     return block_descriptor_cb(desc_cast<block_descriptor>(desc));
   } else {
     Throw(error::CorruptedTable);
@@ -171,7 +180,7 @@ template<
     typename DescTable = DescriptorTable<typename Ops::control>,
     typename Ptr = std::add_pointer_t<
         std::conditional_t<std::is_const_v<DescriptorT>, std::add_const_t<DescTable>, DescTable>>>
-static auto descend_tree(DescriptorT& tdesc) -> ktl::not_null<Ptr> {
+static auto follow(DescriptorT& tdesc) -> ktl::not_null<Ptr> {
   return std::bit_cast<Ptr>(Ops::template get_next_level_desc<Level>(tdesc));
 }
 
@@ -195,7 +204,7 @@ template<
   return process_desc<Ops, Level, result>(
       desc,
       [&](const auto& tdesc) {
-        const auto& children = *descend_tree<Ops, Level>(tdesc);
+        const auto& children = *follow<Ops, Level>(tdesc);
         return lookup<Ops, Level + 1>(children, vaddr);
       },
       [&](const auto& bdesc) {

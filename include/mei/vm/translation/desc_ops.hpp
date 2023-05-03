@@ -29,7 +29,6 @@ concept desc_ops_like = requires(
   { Ops::template set_output_address<0>(pdesc, uintptr_t {}) };
   { Ops::template get_output_address<0>(bdesc) } -> std::convertible_to<uintptr_t>;
   { Ops::template set_output_address<0>(bdesc, uintptr_t {}) };
-  { Ops::can_have_block_desc_at(level) } -> std::convertible_to<bool>;
 };
 
 template<typename Ops, typename Control>
