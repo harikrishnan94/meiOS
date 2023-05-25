@@ -215,6 +215,17 @@ template<
       },
       [](const auto& /* desc */) -> result { return {}; });
 }
+
+// Defines an indivisible unit of mapping to be installed at a specific `level`.
+// Both physical and virtual address are aligned to out_addr_covered_per_entry<level>
+struct atomic_mapping {
+  VirtualAddress vaddr;
+  PhysicalAddress paddr;
+  ktl::u32 level;  // Level at which this mapping is to be installed
+};
+
+// template<ktl::coro::allocator_like Allocator>
+// static auto best_mapping_scheme() -> ktl::coro::generator<typename T, Allocator> {}
 }  // namespace detail
 
 // Walk the translation table using the VirtualAddress `vaddr` and produce corresponding
@@ -222,8 +233,9 @@ template<
 template<desc_ops_like Ops, control_like Control = typename Ops::control>
 inline auto Virt2Phy(const DescriptorTable<Control>& root, VirtualAddress vaddr) noexcept
     -> Result<MemoryMap> {
-  if (!IsValid<Control>(vaddr))
+  if (!IsValid<Control>(vaddr)) [[unlikely]] {
     Throw(error::InvalidVirtualAddress);
+  }
   return detail::lookup<Ops, 0>(root, vaddr);
 }
 
